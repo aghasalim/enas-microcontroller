@@ -73,3 +73,41 @@ jobs:
 
       - name: Latency benchmark
         run: ./build/bench firmware/generated 20
+
+  # The README's numbers are produced by Python and checked by Python. This
+  # recomputes them in SQL and in R from the raw logs, and then corrupts a log
+  # and requires the harness to notice, because a check that cannot fail is not
+  # evidence.
+  crosscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install R if the runner does not have it
+        run: |
+          command -v Rscript || sudo apt-get install -y --no-install-recommends r-base-core
+
+      - name: Recompute the published numbers in SQL and R
+        run: ./verify/verify.sh
+
+      - name: The harness rejects a corrupted search log
+        run: |
+          cp results/search_log.csv /tmp/search_log.csv
+          sed -i '2s/0.4655/0.4695/' results/search_log.csv
+          if ./verify/verify.sh; then
+            echo "FAIL: the harness passed on a corrupted search log"
+            exit 1
+          fi
+          cp /tmp/search_log.csv results/search_log.csv
+          ./verify/verify.sh
+
+      - name: The harness rejects a corrupted retest log
+        run: |
+          cp results/validation.csv /tmp/validation.csv
+          sed -i 's/^winner,2,0.4968/winner,2,0.4868/' results/validation.csv
+          if ./verify/verify.sh; then
+            echo "FAIL: the harness passed on a corrupted retest log"
+            exit 1
+          fi
+          cp /tmp/validation.csv results/validation.csv
+          ./verify/verify.sh
