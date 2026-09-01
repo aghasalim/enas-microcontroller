@@ -12,6 +12,8 @@ from __future__ import annotations
 import collections
 import csv
 import json
+import math
+import statistics as st
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -26,6 +28,16 @@ def load() -> list[dict]:
         for k in ("acc", "fitness", "train_s"):
             r[k] = float(r[k])
     return rows
+
+
+def binom_sd(ok: list[dict], n: int = 2000) -> float:
+    """Standard deviation of an accuracy estimate from n validation samples."""
+    p = st.mean(r["acc"] for r in ok)
+    return math.sqrt(p * (1 - p) / n)
+
+
+def pooled_se(a: dict, b: dict, n: int = 2000) -> float:
+    return math.sqrt(sum(r["acc"] * (1 - r["acc"]) / n for r in (a, b)))
 
 
 def claims(rows: list[dict]) -> list[tuple[str, str]]:
@@ -48,18 +60,24 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
     improved = {r["gen"] for r in ok if r["fitness"] > max(
         [x["fitness"] for x in ok[:ok.index(r)]] or [float("-inf")])} - {"0"}
 
+    # Anchors carry surrounding words only where the value is short enough to
+    # match by accident. Distinctive values stand alone, because prose rewraps
+    # and an anchor that spans a line break fails on a reflow rather than on a
+    # real disagreement.
     return [
         ("candidates evaluated", f"{len(rows)} candidates"),
         ("child slots", f"{len(rows) - 1} child slots"),
-        ("rejected on budget", f"{len(rejected)} it threw away"),
-        ("duplicate evaluations", f"{len(repeated)} it accidentally evaluated twice"),
+        ("rejected on budget", f"{len(rejected)} rejected"),
+        ("duplicate evaluations", f"{len(repeated)} evaluated twice"),
         ("wall clock", f"{round(sum(r['train_s'] for r in rows) / 60)} minutes of training"),
         ("duplicate cost",
          f"{round(sum(r['train_s'] for r in redundant) / 60)} minutes of duplicated"),
-        ("parameter cap", f"{PARAM_CAP:,} parameter cap"),
+        ("parameter cap", f"{PARAM_CAP:,} cap"),
+        ("parameter cap in the objective", "50{,}000"),
         ("sram cap", "250 KB"),
-        ("training subset", "8,000 image subset"),
-        ("subset fraction", "16% of the CIFAR-10"),
+        ("training subset", "8,000 training images"),
+        ("subset fraction", "16% of the split"),
+        ("validation size", "2,000 validation"),
 
         ("seed accuracy", f"| seed, hand written | {seed['acc']:.4f} |"),
         ("seed params", f"| {seed['params']:,} |"),
@@ -72,17 +90,16 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
         ("best fitness", f"**{best['fitness']:.4f}**"),
 
         ("accuracy gained", f"{100 * (best['acc'] - seed['acc']):.1f} accuracy points"),
-        ("params added", f"{best['params'] - seed['params']} more\nparameters"),
+        ("params added", f"{best['params'] - seed['params']} more"),
         ("macs saved", f"{100 * (1 - best['macs'] / seed['macs']):.1f}% fewer"),
         ("where it was found",
          f"generation {best['gen']}, candidate {best['cand']}"),
 
-        ("best working set", f"winner sits at {(best['params'] + best['peak_act']) / 1024:.1f} KB"),
-        ("worst working set", f"was {max(work):.1f} KB"),
-        ("sram headroom", f"{250 / max(work):.1f}x\nheadroom"),
+        ("best working set", f"{(best['params'] + best['peak_act']) / 1024:.1f} KB"),
+        ("worst working set", f"{max(work):.1f} KB"),
+        ("sram headroom", f"{250 / max(work):.1f}x"),
         ("rank by accuracy", {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}[rank] + " by accuracy"),
-        ("accuracy that beat it", f"reached {better['acc']:.4f}"),
-        ("macs of the model that beat it", f"{better['acc']:.4f} at {better['macs']:,}"),
+        ("the model that beat it", f"{better['acc']:.4f} at {better['macs']:,}"),
 
         ("insert drawn", f"drawn {len(insert)} times and produced "
                          f"{sum(r['deployable'] for r in insert)} trainable"),
@@ -92,6 +109,18 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
         ("generations that improved",
          ", ".join(sorted(improved)[:-1]) + " and " + sorted(improved)[-1]),
         ("generations that did not", f"{8 - len(improved)} of the 8 generations"),
+
+        # Section 6. These are the honesty of the report, so they are checked
+        # like any other figure rather than trusted as prose.
+        ("trained candidates", f"{len(ok)} trained candidates"),
+        ("observed sd", f"{st.stdev([r['acc'] for r in ok]):.4f}"),
+        ("binomial sd", f"{binom_sd(ok):.4f}"),
+        ("noise share of variance", f"{100 * binom_sd(ok) ** 2 / st.stdev([r['acc'] for r in ok]) ** 2:.0f}%"),
+        ("residual sd",
+         f"{(st.stdev([r['acc'] for r in ok]) ** 2 - binom_sd(ok) ** 2) ** 0.5:.4f}"),
+        ("headline gap", f"{best['acc'] - seed['acc']:.4f}"),
+        ("pooled standard error", f"{pooled_se(seed, best):.4f}"),
+        ("z score", f"z = {(best['acc'] - seed['acc']) / pooled_se(seed, best):.2f}"),
     ]
 
 
