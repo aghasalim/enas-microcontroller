@@ -1,0 +1,5 @@
+# Versions this run actually used, on macOS 15 with an Apple M4, CPU only.
+torch==2.13.0
+torchvision==0.28.0
+matplotlib==3.11.1
+pytest==9.1.1
