@@ -12,7 +12,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-DOCS = sorted(p for p in ROOT.rglob("*.md") if ".venv" not in p.parts)
+SKIP = {".venv", ".pytest_cache", "build", "node_modules"}
+# rglob otherwise picks up README.md files that tools drop in their own caches,
+# which are not ours to format and inflate the local count over CI's.
+DOCS = sorted(p for p in ROOT.rglob("*.md") if not SKIP & set(p.parts))
 
 
 def prose_lines(text: str):

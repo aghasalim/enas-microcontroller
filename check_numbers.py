@@ -40,6 +40,20 @@ def pooled_se(a: dict, b: dict, n: int = 2000) -> float:
     return math.sqrt(sum(r["acc"] * (1 - r["acc"]) / n for r in (a, b)))
 
 
+def arch() -> dict[str, int]:
+    """The MICRONET_* defines from the generated header."""
+    text = (ROOT / "firmware" / "generated" / "micronet_arch.h").read_text()
+    return {k: int(text.split(f"#define MICRONET_{k}")[1].split()[0])
+            for k in ("N_OPS", "N_WEIGHTS", "PEAK", "CLASSES")}
+
+
+def ref_working_set_kb() -> float:
+    """What firmware/micronet.c actually needs: folded weights plus the three
+    full size buffers it ping-pongs between, one byte each at int8."""
+    a = arch()
+    return (a["N_WEIGHTS"] + 3 * a["PEAK"]) / 1024
+
+
 def claims(rows: list[dict]) -> list[tuple[str, str]]:
     """(what it is, the exact string the README must contain)."""
     ok = [r for r in rows if r["deployable"]]
@@ -121,6 +135,14 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
         ("headline gap", f"{best['acc'] - seed['acc']:.4f}"),
         ("pooled standard error", f"{pooled_se(seed, best):.4f}"),
         ("z score", f"z = {(best['acc'] - seed['acc']) / pooled_se(seed, best):.2f}"),
+
+        # Section 7. Derived from the generated op table, so a re-export that
+        # changes the network invalidates these the same way it invalidates
+        # the header.
+        ("exported ops", f"{arch()['N_OPS']} ops"),
+        ("reference working set", f"{ref_working_set_kb():.1f} KB at int8"),
+        ("cost model gap",
+         f"{ref_working_set_kb() / ((best['params'] + best['peak_act']) / 1024):.1f}x"),
     ]
 
 

@@ -204,13 +204,56 @@ search baseline here, which is the comparison Li and Talwalkar (2019) and Yu et
 al. (2020) show is the one that most often erases a reported NAS gain. Until that
 baseline exists, nothing here separates the search from a lucky walk.
 
-**Nothing was tested on hardware.** Parameters, MACs and peak activation are
-measured from the PyTorch graph. The int8 footprint assumes one byte per weight
-and per activation, which is what CMSIS-NN gives you (Lai et al., 2018), but no
-model here has been quantised, exported or flashed, so every KB figure is a
-projection from a float graph rather than a device measurement.
+**Nothing has run on hardware.** The network is exported and there is a C
+implementation that matches PyTorch (section 7), but it is float, it has not
+been quantised, there is no ARM cross build, and nothing has been flashed. Every
+KB figure is a projection from a float graph rather than a device measurement.
+The int8 numbers assume one byte per weight and per activation, which is what
+CMSIS-NN gives you (Lai et al., 2018).
 
-## 7. Search efficiency
+## 7. Export and the C implementation
+
+The search optimises a cost model. This section is about whether that cost model
+describes anything real.
+
+[`export/export_c.py`](export/export_c.py) folds batch norm into the convolution
+in front of it and flattens the network into a table of 35 ops with every shape
+resolved, walking the genome the same way `search.space.build` does.
+[`firmware/micronet.c`](firmware/micronet.c) interprets that table. Neither file
+contains a transcribed copy of the architecture, because a hand transcription is
+how the two drift apart.
+
+| check | result |
+| --- | --- |
+| C forward against PyTorch, 8 golden images | worst difference 1.192e-06, tolerance 1e-04 |
+| MACs from the C op table | 1,761,024, the same count PyTorch logged |
+| toolchains | gcc and clang, both at `-Wall -Wextra -Wpedantic -Werror` |
+| host latency | 2.97 ms per image on an M4 core |
+
+The golden outputs come from the unfolded PyTorch model while the C runs the
+folded table, so a pass covers the folding algebra and every kernel at once.
+Half the golden inputs are scaled up deliberately: without them no activation
+reaches the ReLU6 ceiling, and deleting the clamp from the C passed the test.
+It did pass, until that was fixed. The exporter now refuses to write a golden
+set that leaves the clamp unexercised, and one test in the suite breaks a kernel
+on purpose and asserts the C test rejects it, because a check that cannot fail is
+not evidence.
+
+**The cost model undercharges by 1.4x.** The fitness function scored the winner
+at 59.4 KB, weights plus one peak activation. The reference implementation needs
+82.9 KB at int8, because it ping-pongs between two full size buffers and holds a
+third for the residual, and never reuses any of them. Both fit 250 KB, so the
+search's conclusions stand, but the metric it optimised is not the number a
+deployment pays. An arena allocator that reuses buffers would close most of the
+gap, and that is the honest fix rather than quoting the smaller number.
+
+What is still missing: quantisation, an ARM cross build, and a device. There is
+no ARM toolchain on the machine that ran the searches or in CI, so the Arduino
+path in [`firmware/bench.cpp`](firmware/bench.cpp) is structured to work rather
+than verified, and the host latency above is an M4 core, which bounds nothing
+about a Cortex-M.
+
+## 8. Search efficiency
 
 ![operator yield](results/figures/operators.png)
 
@@ -235,13 +278,14 @@ The fitness function ranked the winner 4th by accuracy. Two candidates reached
 was written to do, and it is visible in the log rather than hidden behind a single
 reported winner.
 
-## 8. Reproducing
+## 9. Reproducing
 
 ```bash
 make setup
 make search     # 65 min on an M4 CPU, downloads CIFAR-10 on first run
 make figures
 make check
+./scripts/verify.sh   # export to C, build it, check it against PyTorch
 ```
 
 `make search` writes `results/search_log.csv` and `results/best_genome.json`.
@@ -256,7 +300,7 @@ Run pinned to 4 threads. These models are small enough that thread overhead cost
 more than the extra parallelism returns, timed before the run. Per-candidate wall
 clock is the `train_s` column.
 
-## 9. Related work
+## 10. Related work
 
 This is a small evolutionary search in the style of Real et al. (2019), applied to
 the deployment constraint of Lin et al. (2020). It is not competitive with either
