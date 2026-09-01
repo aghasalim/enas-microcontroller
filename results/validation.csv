@@ -1,0 +1,4 @@
+arch,seed,acc,params,train_s
+seed,0,0.474,48354,154.5
+winner,0,0.486,48546,166.15
+seed,1,0.4672,48354,153.39

@@ -10,3 +10,9 @@ __pycache__/
 data/
 
 # results/ IS tracked. The log and the figures are the result.
+
+# Host build products. firmware/generated/ IS tracked: the op table is what CI
+# diffs to catch a stale export, and the golden vectors are the test fixture.
+firmware/test_equivalence
+firmware/bench
+build/

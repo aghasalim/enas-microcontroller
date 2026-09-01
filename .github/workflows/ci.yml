@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  pytest:
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +20,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      # CPU wheels only. The whole suite works on the graph and on the committed
-      # log, so CI never downloads CIFAR-10 and never trains anything.
+      # CPU wheels only. The suite works on the graph and on the committed log,
+      # so CI never downloads CIFAR-10 and never trains anything.
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -31,10 +31,45 @@ jobs:
       - name: Test
         run: pytest -q
 
-      # Redundant with the suite, which shells out to it, but a failure here
-      # names the stale figure directly in the log instead of inside a traceback.
       - name: README numbers agree with the search log
         run: python check_numbers.py
 
       - name: Figures still redraw from the log
         run: python experiments/make_figures.py
+
+      # If search/blocks.py changes and the export is not regenerated, the
+      # committed op table describes a network that no longer exists. This
+      # catches that, and it is the only step that needs torch and a compiler
+      # in the same job.
+      - name: The committed export still matches the model
+        run: |
+          sudo apt-get update && sudo apt-get install -y build-essential
+          cp firmware/generated/micronet_arch.h /tmp/arch.before
+          python export/export_c.py
+          diff /tmp/arch.before firmware/generated/micronet_arch.h
+          make -C firmware test
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A second, stricter toolchain over the same sources. gcc with -Werror
+      # here, clang on the developer machine, so a warning that only one of
+      # them emits still fails the build.
+      - name: Build and test with gcc, warnings fatal
+        run: make -C firmware test CC=gcc CFLAGS="-std=c99 -O2 -Wall -Wextra -Wpedantic -Werror -I."
+
+      - name: Build and test with clang
+        run: |
+          make -C firmware clean
+          make -C firmware test CC=clang CFLAGS="-std=c99 -O2 -Wall -Wextra -Wpedantic -Werror -I."
+
+      - name: CMake build, both languages
+        run: |
+          cmake -S firmware -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+      - name: Latency benchmark
+        run: ./build/bench firmware/generated 20
