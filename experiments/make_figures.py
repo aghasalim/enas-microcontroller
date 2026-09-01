@@ -236,6 +236,77 @@ def fig_topology(rows: list[dict]) -> None:
     plt.close(fig)
 
 
+def fig_validation() -> bool:
+    """Seed against winner on a clean split, one line per training seed.
+
+    Drawn only if results/validation.csv exists, since it comes from a separate
+    run. Paired lines rather than two bars, because both architectures share an
+    initialisation seed and the pairing is the whole reason the comparison is
+    informative at n = 5.
+    """
+    path = ROOT / "results" / "validation.csv"
+    if not path.exists():
+        return False
+
+    by: dict[str, dict[int, float]] = {}
+    for r in csv.DictReader(path.open()):
+        by.setdefault(r["arch"], {})[int(r["seed"])] = float(r["acc"])
+    seeds = sorted(by["seed"])
+    if not seeds:
+        return False
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.5, 4.0),
+                                   gridspec_kw={"width_ratios": [1.35, 1]})
+    for ax in (ax1, ax2):
+        style(ax)
+
+    for s in seeds:
+        lo, hi = by["seed"][s], by["winner"][s]
+        ax1.plot([0, 1], [lo, hi], color=GREEN if hi > lo else RED, lw=1.4,
+                 marker="o", ms=5, alpha=0.85)
+
+    # Stagger labels that would otherwise land on top of each other. Two seeds
+    # finishing within a rounding error of one another is the interesting case,
+    # not one to hide under an unreadable label.
+    span = max(by["winner"].values()) - min(by["winner"].values())
+    placed: list[float] = []
+    for s in sorted(seeds, key=lambda k: -by["winner"][k]):
+        y = by["winner"][s]
+        while any(abs(y - q) < span * 0.07 for q in placed):
+            y -= span * 0.07
+        placed.append(y)
+        ax1.annotate(f"seed {s}", (1, y), textcoords="offset points",
+                     xytext=(9, -3), fontsize=8, color=GREY)
+    ax1.set_xticks([0, 1])
+    ax1.set_xticklabels(["hand written", "search winner"], fontsize=9.5)
+    ax1.set_xlim(-0.25, 1.45)
+    ax1.set_ylabel("held-out accuracy", fontsize=9.5)
+    ax1.set_title("Clean split, five training seeds, paired", fontsize=10.5,
+                  color=INK, loc="left")
+
+    d = [by["winner"][s] - by["seed"][s] for s in seeds]
+    ax2.axhline(0, color=INK, lw=1.0)
+    ax2.scatter([0.06 * (i - 2) for i in range(len(d))], d, s=46, color=GREEN,
+                zorder=3)
+    mean_d = sum(d) / len(d)
+    ax2.axhline(mean_d, color=BLUE, lw=1.8)
+    ax2.annotate(f"clean split  {mean_d:+.4f}", (0.16, mean_d),
+                 textcoords="offset points", xytext=(0, 7), fontsize=9, color=BLUE)
+    ax2.axhline(0.0370, color=RED, lw=1.6, ls="--")
+    ax2.annotate("as the search reported it  +0.0370", (0.16, 0.0370),
+                 textcoords="offset points", xytext=(0, 6), fontsize=9, color=RED)
+    ax2.set_xlim(-0.22, 0.62)
+    ax2.set_xticks([])
+    ax2.set_ylabel("winner minus baseline", fontsize=9.5)
+    ax2.set_title("The search overstated its own result by 1.8x", fontsize=10.5,
+                  color=INK, loc="left")
+
+    fig.tight_layout()
+    fig.savefig(OUT / "validation.png", dpi=170)
+    plt.close(fig)
+    return True
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     rows = load()
@@ -243,6 +314,8 @@ def main() -> int:
     fig_budget(rows)
     fig_operators(rows)
     fig_topology(rows)
+    if not fig_validation():
+        print("note: results/validation.csv absent, skipping the validation figure")
     for p in sorted(OUT.glob("*.png")):
         print(f"wrote {p.relative_to(ROOT)}  ({p.stat().st_size // 1024} KB)")
     return 0

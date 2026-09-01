@@ -1,4 +1,4 @@
-"""Fail if any figure quoted in README.md disagrees with results/search_log.csv.
+"""Fail if any figure quoted in README.md disagrees with the files it came from.
 
 What this covers: the figures listed in claims() are recomputed from the log and
 then required to appear in the README with enough surrounding words that the
@@ -146,6 +146,45 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
     ]
 
 
+def validation_claims() -> list[tuple[str, str]]:
+    """Figures from the clean-split retest. Empty if it has not been run."""
+    path = ROOT / "results" / "validation.csv"
+    if not path.exists():
+        return []
+
+    by: dict[str, dict[int, float]] = {}
+    for r in csv.DictReader(path.open()):
+        by.setdefault(r["arch"], {})[int(r["seed"])] = float(r["acc"])
+    seeds = sorted(by.get("seed", {}))
+    if not seeds or len(seeds) < 2:
+        return []
+
+    d = [by["winner"][k] - by["seed"][k] for k in seeds]
+    mean_d = st.mean(d)
+    se = st.stdev(d) / math.sqrt(len(d))
+    search_gap = 0.0370
+
+    return [
+        ("retest seeds", f"{len(seeds)} training seeds"),
+        ("retest baseline mean", f"| baseline | {st.mean(by['seed'].values()):.4f} |"),
+        ("retest baseline sd", f"| {st.stdev(by['seed'].values()):.4f} |"),
+        ("retest winner mean", f"| winner | {st.mean(by['winner'].values()):.4f} |"),
+        ("retest winner sd", f"| {st.stdev(by['winner'].values()):.4f} |"),
+        ("paired differences",
+         "| " + " | ".join(f"{x:+.4f}" for x in d) + " |"),
+        ("retest mean gap", f"Mean {mean_d:+.4f}"),
+        ("retest standard error", f"standard error {se:.4f}"),
+        ("retest t", f"t(4) = {mean_d / se:.2f}"),
+        ("retest wins", f"ahead on {sum(x > 0 for x in d)} of {len(d)} seeds"),
+        ("inflation factor", f"{search_gap / mean_d:.1f}x"),
+        ("gap in points", f"**{100 * mean_d:.1f} points**"),
+        ("seed spread against the gap",
+         f"{st.stdev(by['winner'].values()) / mean_d * 100:.0f}% of the "
+         f"{mean_d:.4f} effect"),
+        ("weakest seed", f"the gap is {min(d):+.4f}"),
+    ]
+
+
 def main() -> int:
     rows = load()
     readme = (ROOT / "README.md").read_text()
@@ -156,14 +195,15 @@ def main() -> int:
         print("FAIL: best_genome.json is not the highest-fitness row in the log")
         return 1
 
-    checked = claims(rows)
+    checked = claims(rows) + validation_claims()
     missing = [(what, want) for what, want in checked if want not in readme]
     for what, want in missing:
         print(f"FAIL: README is missing {want!r}  ({what})")
     if missing:
         print(f"\n{len(missing)} of {len(checked)} checked figures are stale or missing.")
         return 1
-    print(f"ok: {len(checked)} figures in README.md agree with results/search_log.csv")
+    print(f"ok: {len(checked)} figures in README.md agree with the search log, "
+          f"the clean-split retest and the generated op table")
     return 0
 
 

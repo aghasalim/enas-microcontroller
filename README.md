@@ -117,6 +117,12 @@ this holds.
 3.7 accuracy points and 8.3% fewer multiply-accumulates for 192 more
 parameters, found at generation 5, candidate 2.
 
+**That 3.7 is the search's own figure and it is inflated.** Retested on a split
+held out of the training data, over five training seeds, the gap is
+**2.1 points**, not 3.7. The winner is still genuinely better, on all five
+seeds, but the search overstated its own result by 1.8x. Section 6 has the
+retest and the reason.
+
 **Read 0.5025 as a ranking score, not an accuracy.** Three epochs on 16% of the
 training set at under 50,000 parameters is a budget chosen to make a 33 candidate
 search cost an hour instead of a week. It is enough to order architectures and
@@ -194,8 +200,53 @@ error of 0.0158 is $z = 2.34$, and it is the maximum of 26 draws, so the
 appropriate correction for having taken a maximum makes it weaker still.
 
 **One training seed.** Every candidate was trained from seed 0, so architecture
-quality is confounded with initialisation luck. Nothing in the log separates the
-two.
+quality is confounded with initialisation luck. Nothing in the search log
+separates the two.
+
+### What the retest found
+
+[`experiments/validate_winner.py`](experiments/validate_winner.py) exists to
+measure the first and third of those. It retrains the baseline and the winner
+with validation carved out of the training split, never touching the test split,
+across 5 training seeds. Everything else, the optimiser, schedule,
+augmentation, epoch count and 8,000 image budget, is what the search used, so
+the only things that change are the split and the seed.
+
+![clean split retest](results/figures/validation.png)
+
+| | mean | sd across seeds |
+| --- | ---: | ---: |
+| baseline | 0.4640 | 0.0114 |
+| winner | 0.4851 | 0.0124 |
+
+| paired difference, by training seed | | | | |
+| ---: | ---: | ---: | ---: | ---: |
+| +0.0120 | +0.0016 | +0.0320 | +0.0274 | +0.0322 |
+
+Mean +0.0210, standard error 0.0061, paired $t(4) = 3.45$, two-sided
+$p = 0.026$, and the winner is ahead on 5 of 5 seeds. The pairing matters: both
+architectures share an initialisation seed, so the difference is measured within
+seed rather than across two independent spreads.
+
+Three things follow.
+
+**The result holds.** The winner really is better than the hand-written
+baseline, on every seed tried, and section 5's structural reading survives.
+
+**The search overstated it by 1.8x.** +0.0210 on a clean split against +0.0370
+as reported. Most of that difference is the test-split selection: the search
+picked the candidate that scored best on the same 2,000 images it was judged on.
+
+**A single-seed comparison could not have resolved this.** The winner's own
+spread across seeds is 0.0124, which is 59% of the 0.0210 effect. Every one of
+the 33 decisions in the search was made from one seed, on noise more than half
+the size of the thing being measured. At seed 1 the gap is +0.0016, effectively
+nothing; had the search run from that seed this mutation would probably not have
+been kept.
+
+Five seeds is a weak test by construction and bounds the gap loosely. It is
+enough to show the direction is real and the magnitude was wrong, and not enough
+to put an interval on it worth quoting.
 
 **The search is a hill climb over 26 trained samples.** With 8 generations, 4
 children and one edit per child it walks a thin path rather than mapping the

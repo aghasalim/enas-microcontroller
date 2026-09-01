@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import statistics as st
 import sys
 import time
@@ -94,11 +95,20 @@ def main() -> int:
     for name, xs in got.items():
         print(f"{name:6s}  mean {st.mean(xs):.4f}  sd {st.stdev(xs):.4f}  "
               f"min {min(xs):.4f}  max {max(xs):.4f}")
-    gap = st.mean(got["winner"]) - st.mean(got["seed"])
-    pooled = (st.stdev(got["winner"]) ** 2 + st.stdev(got["seed"]) ** 2) ** 0.5
-    wins = sum(w > s for w, s in zip(got["winner"], got["seed"]))
-    print(f"\ngap {gap:+.4f}  spread of the two means {pooled:.4f}  "
-          f"winner ahead on {wins} of {a.seeds} paired seeds")
+    # Paired, because both architectures are trained from the same
+    # initialisation seed. Comparing the two independent spreads instead throws
+    # away the pairing and understates what the design can detect.
+    d = [w - v for w, v in zip(got["winner"], got["seed"])]
+    mean_d = st.mean(d)
+    se = st.stdev(d) / math.sqrt(len(d)) if len(d) > 1 else float("nan")
+    wins = sum(x > 0 for x in d)
+    print(f"\npaired differences: {[f'{x:+.4f}' for x in d]}")
+    print(f"gap {mean_d:+.4f}  sd {st.stdev(d):.4f}  se {se:.4f}  "
+          f"t({len(d) - 1}) = {mean_d / se:.2f}")
+    print(f"winner ahead on {wins} of {a.seeds} paired seeds")
+    if len(d) < 10:
+        print(f"n = {len(d)}. This bounds the gap loosely and is not a "
+              f"substitute for more seeds.")
     print(f"-> {out}")
     return 0
 
