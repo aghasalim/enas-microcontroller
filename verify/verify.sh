@@ -55,6 +55,24 @@ check_sql () {
 run "SQL, search log aggregation" sqlite3 check_sql
 run "R, statistical inference"    Rscript Rscript verify/stats.R "$root"
 
+# C verifier: compile, then run.
+check_c () {
+    cc -o verify/check verify/check.c -lm || return 1
+    verify/check "$root"
+}
+run "C, search log aggregation" cc check_c
+
+# Go verifier: build from the module directory, then run.
+check_go () {
+    (cd verify/gocheck && go build -o gocheck .) || return 1
+    verify/gocheck/gocheck "$root"
+}
+run "Go, search log aggregation" go check_go
+
+run "JavaScript, search log aggregation" node node verify/check.mjs "$root"
+run "Python, search log aggregation"     python3 python3 verify/check.py "$root"
+run "Ruby, search log aggregation"       ruby ruby verify/check.rb "$root"
+
 printf '\n%s\n' "----------------------------------------"
 printf '%d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skip"
 [ "$fail" -eq 0 ] || exit 1
