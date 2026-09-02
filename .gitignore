@@ -16,3 +16,7 @@ data/
 firmware/test_equivalence
 firmware/bench
 build/
+
+# compiled verifiers
+verify/gocheck/gocheck
+verify/check
