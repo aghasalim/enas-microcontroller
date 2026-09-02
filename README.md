@@ -16,7 +16,9 @@ those three facts are large enough that most of this document is about them.
 All 33 candidates, including the 7 rejected and the 4 evaluated twice, are in
 [`results/search_log.csv`](results/search_log.csv). Every number and figure below
 is derived from that file, and [`check_numbers.py`](check_numbers.py) fails the
-build if the two disagree.
+build if the two disagree. The published figures are also recomputed from the
+raw logs by independent implementations in `verify/`, and CI fails on any
+disagreement.
 
 ## 1. Objective
 
@@ -329,42 +331,7 @@ The fitness function ranked the winner 4th by accuracy. Two candidates reached
 was written to do, and it is visible in the log rather than hidden behind a single
 reported winner.
 
-## 9. Everything here is computed twice
-
-Every figure in this document is derived from `results/search_log.csv` and
-`results/validation.csv` by Python, and then checked against the document by
-[`check_numbers.py`](check_numbers.py), which is also Python reading the same
-two files the same way. That catches a stale README. It cannot catch a wrong
-aggregation, because the checker and the thing it checks share an
-implementation: if the mean were taken over the wrong subset, both sides would
-take it over the wrong subset and agree.
-
-So the published figures are recomputed from the raw logs by two more
-implementations in two more languages, each of which then requires its result
-to appear in README.md as written. CI runs them on every push.
-
-| implementation | what it recomputes, and from what | agreement |
-| --- | --- | --- |
-| [`verify/search_log.sql`](verify/search_log.sql) | 24 figures in sections 4, 5 and 8, from `results/search_log.csv` in SQLite: operator yield, per generation bests, rejection and duplicate counts, the result table, the working set bounds | exact, all 24 strings matched |
-| [`verify/stats.R`](verify/stats.R) | 23 figures in sections 6 and 8, from both logs in base R: the binomial noise decomposition, and the paired t test on the retest | exact, all 23 strings matched |
-
-Run both with [`./verify/verify.sh`](verify/verify.sh). Each is skipped with a
-message if its toolchain is missing, so a partial install still runs the rest.
-
-The R adds one figure nothing else checks. The two-sided $p = 0.026$ quoted in
-section 6 came from a hand-written formula; R computes it with `t.test(paired =
-TRUE)` and gets $t(4) = 3.4479$, $p = 0.02610$.
-
-**The harness is itself checked.** CI corrupts a log, requires the harness to
-reject it, restores it, and requires a pass. Each implementation catches what it
-is responsible for and nothing more. Moving the seed's accuracy by 0.0040 in the
-search log is caught by both, at 2 figures in SQL and 4 in R. Moving one
-accuracy in the retest log is caught by R at 9 figures and correctly ignored by
-the SQL, which does not read that file. Deleting the 7 rejected candidates from
-the search log is caught by SQL at 4 figures, including the operator yield that
-is the whole point of section 8.
-
-## 10. Reproducing
+## 9. Reproducing
 
 ```bash
 make setup
@@ -387,7 +354,7 @@ Run pinned to 4 threads. These models are small enough that thread overhead cost
 more than the extra parallelism returns, timed before the run. Per-candidate wall
 clock is the `train_s` column.
 
-## 11. Related work
+## 10. Related work
 
 This is a small evolutionary search in the style of Real et al. (2019), applied to
 the deployment constraint of Lin et al. (2020). It is not competitive with either
