@@ -20,3 +20,8 @@ build/
 # compiled verifiers
 verify/gocheck/gocheck
 verify/check
+
+# Written by export/train_winner.py, never by the search. The winning genome's
+# float32 weights plus batch norm statistics, about 220 KB. Not committed
+# because no such run has happened yet; see results/runs.md.
+results/winner.pt

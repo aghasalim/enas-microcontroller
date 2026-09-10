@@ -354,6 +354,9 @@ Run pinned to 4 threads. These models are small enough that thread overhead cost
 more than the extra parallelism returns, timed before the run. Per-candidate wall
 clock is the `train_s` column.
 
+What the two runs in `results/` actually were, setting by setting with the
+line that set each one, is in [`results/runs.md`](results/runs.md).
+
 ## 10. Related work
 
 This is a small evolutionary search in the style of Real et al. (2019), applied to
