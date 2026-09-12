@@ -77,7 +77,7 @@ jobs:
   # The README's numbers are produced by Python and checked by Python. This
   # recomputes them in SQL and in R from the raw logs, and then corrupts a log
   # and requires the harness to notice, because a check that cannot fail is not
-  # evidence.
+  # a check.
   crosscheck:
     runs-on: ubuntu-latest
     steps:
