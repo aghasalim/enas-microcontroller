@@ -61,8 +61,19 @@ The same column, one row per generation:
 | 8 | 4 | 0 | 734.6 | 0.5050 |
 
 Generation 8 averages 183.7 s per trained candidate against 149.2 for
-the run, at the same parameter count. The log records that and does
-not explain it.
+the run, at the same parameter count. It is the machine, not the models,
+and the log can show that four ways. Generation 8's candidates average
+1.97M MACs, fewer than generations 1 to 4 at 2.8M to 5.3M, which trained
+faster. Candidate 3 of generation 8 is the same genome as candidate 0 of
+generation 5, byte for byte, with the same 0.5050 accuracy, and it took
+156.4 s against 148.9 s: identical work, 5% slower. Candidate 2 has the
+winner's exact MAC count and took 167.8 s where the winner took 153.4 s.
+And the four candidates ran 227, 183, 168 then 156 s in that order,
+across four unrelated mutations, which is a machine recovering from
+something rather than anything about the architectures. Generation 8
+began 52 minutes into 65 of continuous training on a laptop. Whether the
+something was thermal or another process, the log cannot say, and it is
+not written down anywhere else.
 
 ### The same genome, twice
 
