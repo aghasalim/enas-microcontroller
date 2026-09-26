@@ -36,6 +36,19 @@ def seed_genome() -> dict:
     }
 
 
+def random_genome(rng: random.Random) -> dict:
+    """A uniform draw from the same space the mutations walk, for the random
+    search baseline. At most three stride-2 blocks, same rule as the mutation."""
+    while True:
+        depth = rng.randint(3, 7)
+        blocks = [{"kind": rng.choice(BLOCK_KINDS), "out": rng.choice(WIDTH_CHOICES),
+                   "stride": rng.choice((1, 2)), "k": rng.choice(KERNEL_CHOICES)}
+                  for _ in range(depth)]
+        if sum(b["stride"] for b in blocks) <= depth + 3:
+            return {"stem_width": rng.choice(WIDTH_CHOICES[:4]),
+                    "act_shift": rng.choice(SHIFT_CHOICES), "blocks": blocks}
+
+
 def mutate(genome: dict, rng: random.Random, tries: int = 12) -> tuple[dict, str]:
     """One edit per child, so a fitness change is attributable to one cause.
 

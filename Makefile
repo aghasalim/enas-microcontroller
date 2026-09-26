@@ -17,6 +17,14 @@ test:
 search:
 	$(PY) controller.py --generations 8 --children 4
 
+# The GPU rerun that answers section 6: five seeds per candidate, validation
+# held out of the training split, and a random search baseline of the same
+# size as the hill climb (1 + 8 x 4 = 33 candidates). Writes separate files, the
+# CPU run above stays untouched.
+search-gpu:
+	$(PY) controller.py --generations 8 --children 4 --seeds 5 --device cuda --val-from-train --out search_log_gpu.csv
+	$(PY) controller.py --random 33 --seeds 5 --device cuda --val-from-train --out random_log_gpu.csv
+
 # Redraws every README figure from results/search_log.csv. Trains nothing.
 figures:
 	$(PY) experiments/make_figures.py
