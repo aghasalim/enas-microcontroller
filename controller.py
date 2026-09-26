@@ -35,16 +35,16 @@ def loaders(train_n: int, val_n: int, batch: int, seed: int, val_from_train: boo
         transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(),
         transforms.ToTensor(), norm])
     tf_eval = transforms.Compose([transforms.ToTensor(), norm])
-    tr = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_train)
+    tr = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_train, download=True)
     g = torch.Generator().manual_seed(seed)
     if val_from_train:
         # Validation carved out of the training split, so the search never
         # selects on the test split. Same carve as experiments/validate_winner.py.
-        va = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_eval)
+        va = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_eval, download=True)
         order = torch.randperm(len(tr), generator=g).tolist()
         va_idx, tr_idx = order[:val_n], order[val_n:val_n + train_n]
     else:
-        va = datasets.CIFAR10(ROOT / "data", train=False, transform=tf_eval)
+        va = datasets.CIFAR10(ROOT / "data", train=False, transform=tf_eval, download=True)
         tr_idx = torch.randperm(len(tr), generator=g)[:train_n].tolist()
         va_idx = torch.randperm(len(va), generator=g)[:val_n].tolist()
     return (DataLoader(Subset(tr, tr_idx), batch_size=batch, shuffle=True, num_workers=2),

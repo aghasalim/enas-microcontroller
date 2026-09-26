@@ -45,8 +45,8 @@ def clean_loaders(train_n: int, val_n: int, batch: int, split_seed: int = 1234):
         transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(),
         transforms.ToTensor(), norm])
     tf_eval = transforms.Compose([transforms.ToTensor(), norm])
-    tr = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_train)
-    va = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_eval)
+    tr = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_train, download=True)
+    va = datasets.CIFAR10(ROOT / "data", train=True, transform=tf_eval, download=True)
     g = torch.Generator().manual_seed(split_seed)
     order = torch.randperm(len(tr), generator=g).tolist()
     val_idx, train_idx = order[:val_n], order[val_n:val_n + train_n]
