@@ -54,6 +54,15 @@ def ref_working_set_kb() -> float:
     return (a["N_WEIGHTS"] + 3 * a["PEAK"]) / 1024
 
 
+def exported_kb() -> float:
+    """The cost model's figure for the network in firmware/generated, which is
+    the best row of the 5 seed GPU search (results/winner.pt)."""
+    rows = list(csv.DictReader((ROOT / "results" / "search_log_gpu.csv").open()))
+    best = max((r for r in rows if r["deployable"] == "1"), key=lambda r: float(r["fitness"]))
+    assert int(best["params"]) - arch()["N_WEIGHTS"] < 1000, "export is not the GPU winner"
+    return (int(best["params"]) + int(best["peak_act"])) / 1024
+
+
 def claims(rows: list[dict]) -> list[tuple[str, str]]:
     """(what it is, the exact string the README must contain)."""
     ok = [r for r in rows if r["deployable"]]
@@ -141,8 +150,8 @@ def claims(rows: list[dict]) -> list[tuple[str, str]]:
         # the header.
         ("exported ops", f"{arch()['N_OPS']} ops"),
         ("reference working set", f"{ref_working_set_kb():.1f} KB at int8"),
-        ("cost model gap",
-         f"{ref_working_set_kb() / ((best['params'] + best['peak_act']) / 1024):.1f}x"),
+        ("exported working set", f"at {exported_kb():.1f} KB, weights plus one peak"),
+        ("cost model gap", f"{ref_working_set_kb() / exported_kb():.1f}x"),
     ]
 
 
@@ -232,6 +241,42 @@ def gpu_claims() -> list[tuple[str, str]]:
     return out
 
 
+def more_gpu_claims() -> list[tuple[str, str]]:
+    """Search seeds 1 and 2 and the full training runs. Empty if absent."""
+    rescore = ROOT / "results" / "rescore_gpu_seeds12.csv"
+    full = ROOT / "results" / "full_train.csv"
+    if not (rescore.exists() and full.exists()):
+        return []
+    out = []
+    by: dict[str, dict[int, float]] = {}
+    for p in (ROOT / "results" / "rescore_gpu.csv", rescore):
+        for r in csv.DictReader(p.open()):
+            by.setdefault(r["arch"], {})[int(r["seed"])] = float(r["acc"])
+    seeds = sorted(by["seed"])
+    for n, name in ((0, "hill_gpu"), (1, "hill_gpu_seed1"), (2, "hill_gpu_seed2")):
+        d = [by[name][k] - by["seed"][k] for k in seeds]
+        se = st.stdev(d) / math.sqrt(len(d))
+        out.append((f"search seed {n}", f"| {n} | {st.mean(d):+.4f} | {se:.4f} | "
+                    f"{sum(x > 0 for x in d)} of {len(d)} |"))
+        if n == 2:
+            out.append(("weak search t", f"$t(4) = {st.mean(d) / se:.2f}$"))
+
+    f: dict[str, dict[int, float]] = {}
+    for r in csv.DictReader(full.open()):
+        f.setdefault(r["arch"], {})[int(r["seed"])] = float(r["acc"])
+    for name, label in (("seed", "baseline"), ("hill_cpu", "CPU winner"), ("hill_gpu", "GPU winner")):
+        xs = [f[name][k] for k in sorted(f[name])]
+        out.append((f"full {name}", f"| {label} | " + " | ".join(f"{x:.4f}" for x in xs)
+                    + f" | {st.mean(xs):.4f} |"))
+    base = st.mean(f["seed"].values())
+    out += [
+        ("full gpu gap", f"GPU winner is {100 * (st.mean(f['hill_gpu'].values()) - base):.1f} points better"),
+        ("full cpu gap", f"CPU winner is {100 * (st.mean(f['hill_cpu'].values()) - base):.1f} points better"),
+        ("headline", f"{100 * st.mean(f['hill_gpu'].values()):.1f}% on 5,000 held out"),
+    ]
+    return out
+
+
 def main() -> int:
     rows = load()
     readme = (ROOT / "README.md").read_text()
@@ -242,7 +287,7 @@ def main() -> int:
         print("FAIL: best_genome.json is not the highest-fitness row in the log")
         return 1
 
-    checked = claims(rows) + validation_claims() + gpu_claims()
+    checked = claims(rows) + validation_claims() + gpu_claims() + more_gpu_claims()
     missing = [(what, want) for what, want in checked if want not in readme]
     for what, want in missing:
         print(f"FAIL: README is missing {want!r}  ({what})")

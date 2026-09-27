@@ -1,0 +1,46 @@
+Files already downloaded and verified
+Files already downloaded and verified
+gen 0 seed: acc 0.4696 params 48,354 fitness 0.2502 (33s)
+gen 1 cand 0: kernel block1 5->7                 acc 0.4662 params 48,546 fitness 0.2467
+gen 1 cand 1: width block3 128->160              rejected, undeployable
+gen 1 cand 2: act leak 2^-4->2^-5                acc 0.4705 params 48,354 fitness 0.2511
+gen 1 cand 3: act leak 2^-5->2^-2                acc 0.4572 params 48,354 fitness 0.2378
+gen 1 best fitness 0.2511
+gen 2 cand 0: act leak 2^-5->2^-3                acc 0.4616 params 48,354 fitness 0.2422
+gen 2 cand 1: act leak 2^-5->2^-2                acc 0.4551 params 48,354 fitness 0.2357
+gen 2 cand 2: drop block3                        acc 0.4288 params 30,562 fitness 0.2122
+gen 2 cand 3: kind block1 asym->shift            acc 0.4525 params 47,778 fitness 0.2336
+gen 2 best fitness 0.2511  (no improvement this generation)
+gen 3 cand 0: insert block after 0               rejected, undeployable
+gen 3 cand 1: width block0 48->128               rejected, undeployable
+gen 3 cand 2: insert block after 0               rejected, undeployable
+gen 3 cand 3: kernel block3 5->3                 acc 0.4651 params 47,970 fitness 0.2459
+gen 3 best fitness 0.2511  (no improvement this generation)
+gen 4 cand 0: insert block after 1               rejected, undeployable
+gen 4 cand 1: insert block after 1               rejected, undeployable
+gen 4 cand 2: drop block1                        acc 0.4413 params 38,370 fitness 0.2184
+gen 4 cand 3: stride block3 2->1                 acc 0.4694 params 48,354 fitness 0.2453
+gen 4 best fitness 0.2511  (no improvement this generation)
+gen 5 cand 0: kind block0 shift->asym            acc 0.4872 params 48,546 fitness 0.2676
+gen 5 cand 1: act leak 2^-5->2^-4                acc 0.4865 params 48,546 fitness 0.2669
+gen 5 cand 2: width block1 96->128               rejected, undeployable
+gen 5 cand 3: drop block2                        acc 0.4859 params 39,138 fitness 0.2713
+gen 5 best fitness 0.2713
+gen 6 cand 0: width block2 128->96               acc 0.4672 params 31,906 fitness 0.2552
+gen 6 cand 1: drop block3                        acc 0.4490 params 22,498 fitness 0.2411
+gen 6 cand 2: insert block after 1               acc 0.4937 params 49,698 fitness 0.2737
+gen 6 cand 3: insert block after 3               rejected, undeployable
+gen 6 best fitness 0.2737
+gen 7 cand 0: stride block0 1->2                 acc 0.4655 params 49,698 fitness 0.2554
+gen 7 cand 1: act leak 2^-5->2^-4                acc 0.4943 params 49,698 fitness 0.2743
+gen 7 cand 2: stride block3 2->1                 acc 0.5015 params 49,698 fitness 0.2769
+gen 7 cand 3: act leak 2^-4->2^-3                acc 0.5015 params 49,698 fitness 0.2769
+gen 7 best fitness 0.2769
+gen 8 cand 0: insert block after 2               rejected, undeployable
+gen 8 cand 1: drop block4                        acc 0.4858 params 33,058 fitness 0.2679
+gen 8 cand 2: width block1 96->64                acc 0.4926 params 44,642 fitness 0.2698
+gen 8 cand 3: stride block3 1->2                 acc 0.4944 params 49,698 fitness 0.2744
+gen 8 best fitness 0.2769  (no improvement this generation)
+
+search done in 730s, best fitness 0.2769
+-> /workspace/enas-microcontroller/results/search_log_gpu_seed1.csv

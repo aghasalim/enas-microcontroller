@@ -137,13 +137,34 @@ on the Apple M4 CPU with 4 threads, torch 2.13.0. Seeds 100 to 104,
 which neither search used, on the split seed 1234 carve from Run 2.
 15 trainings, `rescore_gpu.csv`.
 
-## What none of the runs saved
+## Run 5, two more search seeds on a GPU
 
-No weights. The search keeps genomes and nothing else
-(export/train_winner.py, docstring lines 3 to 4). `train_winner.py`
-would write `results/winner.pt` (train_winner.py:50 to :53) and has not
-been run: README section 4 says the winner has not been retrained, and
-`export/export_c.py` falls back to a seed 0 initialisation when that
-file is missing (export_c.py:184 to :188). The path is listed in
-`.gitignore` so a future run does not commit a checkpoint next to the
-logs without a decision.
+Same command as Run 3's hill climb with `--seed 1` and `--seed 2`, on
+an RTX A5000 (secure cloud) on 2026-09-27. The seed sets the mutation
+rng, the training seeds (seed to seed + 4) and the validation carve, so
+each is an independent search. Logs `search_log_gpu_seed1.csv` and
+`search_log_gpu_seed2.csv`, winners `best_genome_gpu_seed1.json` and
+`best_genome_gpu_seed2.json`, console output in `run_gpu_seed1.log` and
+`run_gpu_seed2.log`.
+
+## Run 6, full training
+
+`export/train_winner.py --genome <genome> --device cuda --seed <s>`, on
+the same A5000, for the baseline, the Run 1 CPU winner and the Run 3
+GPU winner, seeds 0 to 2. 12 epochs on 40,000 training images, scored on
+5,000 held out of the training split with the split seed 1234 carve
+(train_winner.py defaults). Every row is in `full_train.csv`. The GPU
+winner at seed 0 is `winner.pt`, which is what section 7 exports.
+
+## Run 7, rescoring the new winners
+
+As Run 4, on the Mac CPU, for the Run 5 winners:
+`validate_winner.py --no-winner --first-seed 100 --seeds 5 --arch
+hill_gpu_seed1=... --arch hill_gpu_seed2=... --out
+rescore_gpu_seeds12.csv`.
+
+## Weights
+
+`winner.pt` is the only checkpoint committed, 200 KB, the network the
+firmware runs. The other eight full training checkpoints came back from the
+pod but are not committed.

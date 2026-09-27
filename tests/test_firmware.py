@@ -67,10 +67,15 @@ def test_c_op_table_agrees_with_pytorch_on_macs():
         elif o["op"] == 6:      # OP_LINEAR
             total += o["in_c"] * o["out_c"]
 
-    best = json.loads((ROOT / "results" / "best_genome.json").read_text())
+    # The firmware is generated from results/winner.pt, which carries its own
+    # genome; the search log that found that genome has the MACs PyTorch counted.
+    import torch
+
+    exported = torch.load(ROOT / "results" / "winner.pt", weights_only=False)["genome"]
     logged = [int(r["macs"]) for r in
-              csv.DictReader((ROOT / "results" / "search_log.csv").open())
-              if json.loads(r["genome"]) == best]
+              csv.DictReader((ROOT / "results" / "search_log_gpu.csv").open())
+              if json.loads(r["genome"]) == exported]
+    assert logged, "winner.pt's genome is not in results/search_log_gpu.csv"
     assert total == logged[0]
 
 

@@ -128,8 +128,8 @@ retest and the reason.
 **Read 0.5025 as a ranking score, not an accuracy.** Three epochs on 16% of the
 training set at under 50,000 parameters is a budget chosen to make a 33 candidate
 search cost an hour instead of a week. It is enough to order architectures and
-nowhere near enough to say what one is worth. The winner has not been retrained,
-so this repository states no headline accuracy.
+nowhere near enough to say what one is worth. Section 6 retrains the winners
+properly, 12 epochs on 40,000 images, and that is where the real accuracies are.
 
 ![search trajectory](results/figures/search-trajectory.png)
 
@@ -310,9 +310,47 @@ grows block 3's from 5 to 7
 ([`results/best_genome_gpu.json`](results/best_genome_gpu.json)). Section 7 still exports the CPU winner; the GPU winner has not been through the C
 path.
 
-What this still does not show: one search seed each, so both searches are one
-walk, and 5 fresh seeds bound the gap loosely. A second search seed would say
-whether the hill climb finds +0.025 reliably or found it once.
+### Two more search seeds, and full training
+
+A single search could have found +0.025 once, so the hill climb was run twice
+more from search seeds 1 and 2 on an RTX A5000, each with its own mutation
+order, training seeds and validation carve. Each winner was rescored on seeds
+100 to 104 exactly as above
+([`results/rescore_gpu_seeds12.csv`](results/rescore_gpu_seeds12.csv)).
+
+| search seed | gap over the baseline on seeds 100 to 104 | se | ahead on |
+| --- | ---: | ---: | ---: |
+| 0 | +0.0249 | 0.0036 | 5 of 5 |
+| 1 | +0.0292 | 0.0027 | 5 of 5 |
+| 2 | +0.0078 | 0.0038 | 4 of 5 |
+
+Every search found something better than the baseline, and two of three found
+about +0.025 to +0.03. The third found a network only slightly better, with
+$t(4) = 2.04$, which I would not claim. The three winners are different
+networks; what they share is more asymmetric blocks than the baseline.
+
+All of that is still the 3 epoch ranking budget. To see what the networks are
+actually worth, the baseline, the CPU winner and the search seed 0 GPU winner
+were each trained properly with
+[`export/train_winner.py`](export/train_winner.py): 12 epochs, 40,000 images,
+5,000 held out of the training split, 3 seeds
+([`results/full_train.csv`](results/full_train.csv)).
+
+| full training | seed 0 | seed 1 | seed 2 | mean |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | 0.7158 | 0.7184 | 0.7206 | 0.7183 |
+| CPU winner | 0.7498 | 0.7412 | 0.7312 | 0.7407 |
+| GPU winner | 0.7642 | 0.7604 | 0.7682 | 0.7643 |
+
+**At full training the GPU winner is 4.6 points better than the baseline**, on
+every seed, at 49,762 parameters against 48,354. The gap grows with training
+instead of shrinking, which is the opposite of what a ranking artefact would
+do. The CPU winner is 2.2 points better, which matches the retest above. This is
+the first accuracy this repository states as a result: 76.4% on 5,000 held out
+CIFAR-10 images under a 50k parameter budget.
+
+What this still does not show: 3 search seeds and 3 training seeds bound the
+numbers loosely, and none of it has run on a microcontroller.
 
 **Nothing has run on hardware.** The network is exported and there is a C
 implementation that matches PyTorch (section 7), but it is float, it has not
@@ -327,18 +365,23 @@ The search optimises a cost model. This section is about whether that cost model
 describes anything real.
 
 [`export/export_c.py`](export/export_c.py) folds batch norm into the convolution
-in front of it and flattens the network into a table of 35 ops with every shape
+in front of it and flattens the network into a table of 37 ops with every shape
 resolved, walking the genome the same way `search.space.build` does.
-[`firmware/micronet.c`](firmware/micronet.c) interprets that table. Neither file
+[`firmware/micronet.c`](firmware/micronet.c) interprets that table. The network
+exported is the 5 seed GPU winner from section 6 with trained weights,
+[`results/winner.pt`](results/winner.pt), 12 epochs on 40,000 images, seed 0.
+Earlier versions of this section exported the CPU winner at a random
+initialisation, which checks the arithmetic but not a network anyone would ship.
+Neither file
 contains a transcribed copy of the architecture, because a hand transcription is
 how the two drift apart.
 
 | check | result |
 | --- | --- |
-| C forward against PyTorch, 8 golden images | worst difference 1.192e-06, tolerance 1e-04 |
-| MACs from the C op table | 1,761,024, the same count PyTorch logged |
+| C forward against PyTorch, 8 golden images | worst difference 3.219e-06, tolerance 1e-04 |
+| MACs from the C op table | 1,954,560, the same count PyTorch logged |
 | toolchains | gcc and clang, both at `-Wall -Wextra -Wpedantic -Werror` |
-| host latency | 2.97 ms per image on an M4 core |
+| host latency | 3.14 ms per image on an M4 core |
 
 The golden outputs come from the unfolded PyTorch model while the C runs the
 folded table, so a pass covers the folding algebra and every kernel at once.
@@ -350,8 +393,8 @@ on purpose and asserts the C test rejects it, because a check that cannot fail i
 not evidence.
 
 **The cost model undercharges by 1.4x.** The fitness function scored the winner
-at 59.4 KB, weights plus one peak activation. The reference implementation needs
-82.9 KB at int8, because it ping-pongs between two full size buffers and holds a
+at 60.6 KB, weights plus one peak activation. The reference implementation needs
+84.1 KB at int8, because it ping-pongs between two full size buffers and holds a
 third for the residual, and never reuses any of them. Both fit 250 KB, so the
 search's conclusions stand, but the metric it optimised is not the number a
 deployment pays. An arena allocator that reuses buffers would close most of the
