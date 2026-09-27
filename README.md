@@ -39,14 +39,13 @@ undeployable model win whenever its accuracy advantage exceeds the deduction,
 which measures the wrong thing. The rejection also runs before training, so an
 infeasible candidate costs no compute.
 
-$A(m)$ is measured with forward hooks as the largest tensor any module emits, not
-estimated from $P(m)$. Weights are the number people quote; activations are the
+$A(m)$ is measured with forward hooks as the largest tensor any module emits. Weights are the number people quote; activations are the
 number that makes the deployment fail. A real arena allocator does better by
 reusing buffers, so this is an upper bound on the working set.
 
 ## 2. Search space
 
-A genome is a dict, not generated code:
+A genome is a plain dict:
 
 ```python
 {"stem_width": 24, "act_shift": 4,
@@ -102,7 +101,7 @@ the output range fixed so the activation folds into requantisation.
 | hardware | Apple M4, CPU only, 4 threads, torch 2.13.0 |
 | wall clock | 65 minutes of training over 33 candidates |
 
-The seed is set before the model is constructed, not after, which is what puts
+The seed is set before the model is constructed, which is what puts
 weight initialisation inside the seed. Four genomes were evaluated twice during
 the run and all four returned byte-identical accuracy, which is the evidence that
 this holds.
@@ -123,7 +122,7 @@ held out of the training data, over five training seeds, the gap is
 seeds, but the search overstated its own result by 1.8x. Section 6 has the
 retest and the reason.
 
-Read 0.5025 as a ranking score, not an accuracy. Three epochs on 16% of the
+Read 0.5025 as a ranking score. Three epochs on 16% of the
 training set at under 50,000 parameters is a budget chosen to make a 33 candidate
 search cost an hour. It is enough to order architectures and
 nowhere near enough to say what one is worth. Section 6 retrains the winners
@@ -395,7 +394,7 @@ gap, and that is the real fix.
 
 What is still missing: quantisation, an ARM cross build, and a device. There is
 no ARM toolchain on the machine that ran the searches or in CI, so the Arduino
-path in [`firmware/bench.cpp`](firmware/bench.cpp) is structured to work, not verified, and the host latency above is an M4 core, which bounds nothing
+path in [`firmware/bench.cpp`](firmware/bench.cpp) is structured to work but unverified, and the host latency above is an M4 core, which bounds nothing
 about a Cortex-M.
 
 ## 8. Search efficiency
@@ -420,8 +419,7 @@ evidence in section 3.
 The fitness function ranked the winner 4th by accuracy. Two candidates reached
 0.5050 and one 0.5045, all with more compute, and the MAC term preferred 0.5025 at
 1,761,024 MACs over 0.5050 at 2,570,496. That trade is the objective doing what it
-was written to do, and it is visible in the log, not hidden behind a single
-reported winner.
+was written to do, and it is visible in the log.
 
 ## 9. Reproducing
 
