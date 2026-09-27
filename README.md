@@ -30,12 +30,11 @@ maximises
 $$\mathcal{F}(m) = \mathrm{Acc}(m) - \beta \log_{10} P(m) - \gamma \log_{10} M(m),
 \qquad \beta = \gamma = 0.02$$
 
-subject to two constraints that are enforced as rejections instead of penalties:
+subject to two constraints that are enforced as hard rejections:
 
 $$P(m) \le 50{,}000 \qquad\text{and}\qquad P(m) + A(m) \le 250\text{ KB at int8}$$
 
-A model that breaches either cannot be flashed at all, so it scores
-$-\infty$ instead of a good accuracy with a deduction. Soft penalties let an
+A model that breaches either cannot be flashed at all, so it scores $-\infty$. Soft penalties let an
 undeployable model win whenever its accuracy advantage exceeds the deduction,
 which measures the wrong thing. The rejection also runs before training, so an
 infeasible candidate costs no compute.
@@ -80,12 +79,11 @@ training slot. Both block types are chosen for what they cost on the device:
   on the device it is pointer arithmetic.
 - **`asym`** buys a $k \times k$ depthwise receptive field as $1 \times k$ then
   $k \times 1$, the factorisation from Szegedy et al. (2016) applied to the
-  depthwise convolutions of Howard et al. (2017). Ten weights per channel instead
-  of 25 at $k = 5$, and the intermediate never materialises at full width, which
+  depthwise convolutions of Howard et al. (2017). Ten weights per channel where a full kernel needs 25 at $k = 5$, and the intermediate never materialises at full width, which
   matters more for peak SRAM than the weight saving does.
 
 The activation is a ReLU6 with a leak of $2^{-s}$. In an int8 pipeline that
-constant is an arithmetic right shift instead of a multiply, and the clamp keeps
+constant is an arithmetic right shift with no multiply, and the clamp keeps
 the output range fixed so the activation folds into requantisation.
 
 ## 3. Protocol
@@ -127,7 +125,7 @@ retest and the reason.
 
 Read 0.5025 as a ranking score, not an accuracy. Three epochs on 16% of the
 training set at under 50,000 parameters is a budget chosen to make a 33 candidate
-search cost an hour instead of a week. It is enough to order architectures and
+search cost an hour. It is enough to order architectures and
 nowhere near enough to say what one is worth. Section 6 retrains the winners
 properly, 12 epochs on 40,000 images, and that is where the real accuracies are.
 
@@ -137,15 +135,13 @@ properly, 12 epochs on 40,000 images, and that is where the real accuracies are.
 
 ![seed against winner, block by block](results/figures/topology.png)
 
-Two edits separate the winner from the baseline: block 0 became a learned
-asymmetric depthwise block instead of a zero-parameter shift block, and block 4
+Two edits separate the winner from the baseline: block 0 went from a zero-parameter shift block to a learned asymmetric depthwise block, and block 4
 gained a stride. The path was not two steps. Block 3's stride went 2 to 1 in
 generation 1, the first improvement found, then back to 2 in generation 5, the
 last. Four generations were spent on a change that was undone.
 
 Learned spatial filtering pays at high resolution and not at low. Both
-conversions below were drawn from the same parent in the same generation, so this
-is a controlled pair instead of two anecdotes:
+conversions below were drawn from the same parent in the same generation, so they form a controlled pair:
 
 | edit | position | resolution | accuracy | change |
 | --- | --- | --- | ---: | ---: |
@@ -180,7 +176,7 @@ the obvious next run.
 ## 6. Threats to validity
 
 This section is the reason to trust or distrust section 4, and three of the
-problems in it are defects in the setup instead of deliberate budget choices.
+problems in it are plain defects in the setup.
 
 Selection ran on the test split. `loaders()` builds the validation set from
 `CIFAR10(train=False)`, so every candidate was ranked on 2,000 images from the
@@ -227,8 +223,7 @@ the only things that change are the split and the seed.
 
 Mean +0.0210, standard error 0.0061, paired $t(4) = 3.45$, two-sided
 $p = 0.026$, and the winner is ahead on 5 of 5 seeds. The pairing matters: both
-architectures share an initialisation seed, so the difference is measured within
-seed instead of across two independent spreads.
+architectures share an initialisation seed, so the difference is measured within each seed.
 
 Three things follow.
 
@@ -343,9 +338,7 @@ were each trained properly with
 | GPU winner | 0.7642 | 0.7604 | 0.7682 | 0.7643 |
 
 **At full training the GPU winner is 4.6 points better than the baseline**, on
-every seed, at 49,762 parameters against 48,354. The gap grows with training
-instead of shrinking, which is the opposite of what a ranking artefact would
-do. The CPU winner is 2.2 points better, which matches the retest above. This is
+every seed, at 49,762 parameters against 48,354. The gap grows with training, and a ranking artefact would shrink. The CPU winner is 2.2 points better, which matches the retest above. This is
 the first accuracy this repository states as a result: 76.4% on 5,000 held out
 CIFAR-10 images under a 50k parameter budget.
 
@@ -355,7 +348,7 @@ numbers loosely, and none of it has run on a microcontroller.
 Nothing has run on hardware. The network is exported and there is a C
 implementation that matches PyTorch (section 7), but it is float, it has not
 been quantised, there is no ARM cross build, and nothing has been flashed. Every
-KB figure is a projection from a float graph instead of a device measurement.
+KB figure is a projection from a float graph; nothing was measured on a device.
 The int8 numbers assume one byte per weight and per activation, which is what
 CMSIS-NN gives you (Lai et al., 2018).
 
@@ -398,7 +391,7 @@ at 60.6 KB, weights plus one peak activation. The reference implementation needs
 third for the residual, and never reuses any of them. Both fit 250 KB, so the
 search's conclusions stand, but the metric it optimised is not the number a
 deployment pays. An arena allocator that reuses buffers would close most of the
-gap, and that is the real fix instead of quoting the smaller number.
+gap, and that is the real fix.
 
 What is still missing: quantisation, an ARM cross build, and a device. There is
 no ARM toolchain on the machine that ran the searches or in CI, so the Arduino
