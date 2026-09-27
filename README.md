@@ -5,6 +5,7 @@ the failed candidates and the search's own defects in the log.**
 
 [![ci](https://github.com/aghasalim/enas-microcontroller/actions/workflows/ci.yml/badge.svg)](https://github.com/aghasalim/enas-microcontroller/actions/workflows/ci.yml)
 [![licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23003622.svg)](https://doi.org/10.5281/zenodo.23003622)
 
 A hand-written baseline for a Cortex-M class device is mutated one edit at a
 time, each child is trained briefly on CIFAR-10, and anything that would not fit
