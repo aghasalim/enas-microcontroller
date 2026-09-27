@@ -1,0 +1,87 @@
+python controller.py --generations 8 --children 4 --seeds 5 --device cuda --val-from-train --out search_log_gpu.csv
+Files already downloaded and verified
+Files already downloaded and verified
+gen 0 seed: acc 0.4610 params 48,354 fitness 0.2416 (22s)
+gen 1 cand 0: stride block3 2->1                 acc 0.4714 params 48,354 fitness 0.2473
+gen 1 cand 1: stride block3 1->2                 acc 0.4611 params 48,354 fitness 0.2417
+gen 1 cand 2: width block2 96->64                acc 0.4677 params 40,738 fitness 0.2464
+gen 1 cand 3: act leak 2^-4->2^-3                acc 0.4683 params 48,354 fitness 0.2442
+gen 1 best fitness 0.2473
+gen 2 cand 0: act leak 2^-4->2^-5                acc 0.4703 params 48,354 fitness 0.2462
+gen 2 cand 1: kernel block1 5->7                 acc 0.4743 params 48,546 fitness 0.2501
+gen 2 cand 2: kernel block1 7->5                 acc 0.4672 params 48,354 fitness 0.2431
+gen 2 cand 3: insert block after 4               rejected, undeployable
+gen 2 best fitness 0.2501
+gen 3 cand 0: width block0 48->160               rejected, undeployable
+gen 3 cand 1: drop block2                        acc 0.4680 params 39,138 fitness 0.2473
+gen 3 cand 2: act leak 2^-4->2^-2                acc 0.4628 params 48,546 fitness 0.2386
+gen 3 cand 3: kind block3 asym->shift            acc 0.4456 params 47,394 fitness 0.2217
+gen 3 best fitness 0.2501  (no improvement this generation)
+gen 4 cand 0: kind block4 shift->asym            acc 0.4748 params 49,570 fitness 0.2503
+gen 4 cand 1: drop block1                        acc 0.4471 params 39,394 fitness 0.2157
+gen 4 cand 2: insert block after 3               rejected, undeployable
+gen 4 cand 3: kind block0 shift->asym            acc 0.4886 params 49,762 fitness 0.2639
+gen 4 best fitness 0.2639
+gen 5 cand 0: stride block4 1->2                 acc 0.4807 params 49,762 fitness 0.2584
+gen 5 cand 1: width block0 48->128               rejected, undeployable
+gen 5 cand 2: stride block3 1->2                 acc 0.4925 params 49,762 fitness 0.2725
+gen 5 cand 3: drop block0                        acc 0.4720 params 45,634 fitness 0.2555
+gen 5 best fitness 0.2725
+gen 6 cand 0: insert block after 3               rejected, undeployable
+gen 6 cand 1: drop block2                        acc 0.4832 params 40,354 fitness 0.2681
+gen 6 cand 2: drop block0                        acc 0.4735 params 45,634 fitness 0.2570
+gen 6 cand 3: kernel block1 7->3                 acc 0.4941 params 49,378 fitness 0.2745
+gen 6 best fitness 0.2745
+gen 7 cand 0: stride block1 2->1                 acc 0.4760 params 49,378 fitness 0.2464
+gen 7 cand 1: stride block4 1->2                 acc 0.4908 params 49,378 fitness 0.2721
+gen 7 cand 2: act leak 2^-4->2^-2                acc 0.4833 params 49,378 fitness 0.2637
+gen 7 cand 3: kind block4 asym->shift            acc 0.4799 params 48,354 fitness 0.2605
+gen 7 best fitness 0.2745  (no improvement this generation)
+gen 8 cand 0: act leak 2^-4->2^-3                acc 0.4890 params 49,378 fitness 0.2694
+gen 8 cand 1: insert block after 2               rejected, undeployable
+gen 8 cand 2: kind block4 asym->shift            acc 0.4794 params 48,354 fitness 0.2600
+gen 8 cand 3: kernel block3 5->7                 acc 0.4950 params 49,762 fitness 0.2752
+gen 8 best fitness 0.2752
+
+search done in 575s, best fitness 0.2752
+-> /workspace/enas-microcontroller/results/search_log_gpu.csv
+python controller.py --random 33 --seeds 5 --device cuda --val-from-train --out random_log_gpu.csv
+Files already downloaded and verified
+Files already downloaded and verified
+gen 0 seed: acc 0.4601 params 48,354 fitness 0.2407 (22s)
+random 0: acc 0.4288 params 33,402 fitness 0.2166
+random 1: acc 0.4635 params 18,202 fitness 0.2475
+random 2: acc 0.3797 params 20,154 fitness 0.1601
+random 3: acc 0.2787 params 4,042 fitness 0.0881
+random 4: acc 0.2986 params 12,090 fitness 0.0892
+random 5: acc 0.3508 params 5,034 fitness 0.1621
+random 6: acc 0.4388 params 16,970 fitness 0.2233
+random 7: acc 0.0000 params 52,522 fitness -inf
+random 8: acc 0.4285 params 12,186 fitness 0.2222
+random 9: acc 0.2809 params 5,826 fitness 0.0892
+random 10: acc 0.4359 params 24,586 fitness 0.2282
+random 11: acc 0.4472 params 29,826 fitness 0.2422
+random 12: acc 0.0000 params 53,122 fitness -inf
+random 13: acc 0.4636 params 31,114 fitness 0.2536
+random 14: acc 0.3240 params 5,306 fitness 0.1332
+random 15: acc 0.3676 params 4,954 fitness 0.1854
+random 16: acc 0.4095 params 12,250 fitness 0.2038
+random 17: acc 0.3104 params 3,498 fitness 0.1304
+random 18: acc 0.4305 params 20,234 fitness 0.2113
+random 19: acc 0.3679 params 16,922 fitness 0.1511
+random 20: acc 0.4316 params 29,434 fitness 0.2097
+random 21: acc 0.4677 params 46,394 fitness 0.2446
+random 22: acc 0.4499 params 33,026 fitness 0.2372
+random 23: acc 0.3619 params 9,074 fitness 0.1699
+random 24: acc 0.3795 params 8,058 fitness 0.1816
+random 25: acc 0.0000 params 53,570 fitness -inf
+random 26: acc 0.3957 params 19,706 fitness 0.2011
+random 27: acc 0.4682 params 44,810 fitness 0.2541
+random 28: acc 0.3240 params 11,970 fitness 0.1142
+random 29: acc 0.4000 params 12,474 fitness 0.2055
+random 30: acc 0.3553 params 27,394 fitness 0.1401
+random 31: acc 0.4398 params 17,994 fitness 0.2318
+random 32: acc 0.3878 params 13,994 fitness 0.1891
+
+search done in 666s, best fitness 0.2541
+-> /workspace/enas-microcontroller/results/random_log_gpu.csv

@@ -185,6 +185,53 @@ def validation_claims() -> list[tuple[str, str]]:
     ]
 
 
+def gpu_claims() -> list[tuple[str, str]]:
+    """Figures from the 5 seed GPU rerun and its fresh seed rescore. Empty if
+    those files are absent."""
+    paths = [ROOT / "results" / n for n in
+             ("search_log_gpu.csv", "random_log_gpu.csv", "rescore_gpu.csv")]
+    if not all(p.exists() for p in paths):
+        return []
+
+    def log(p):
+        rows = list(csv.DictReader(p.open()))
+        for r in rows:
+            r["fitness"], r["acc"] = float(r["fitness"]), float(r["acc"])
+            r["train_s"], r["accs"] = float(r["train_s"]), json.loads(r["accs"])
+        return rows
+
+    hill, rand = log(paths[0]), log(paths[1])
+    top = lambda rows: max((r for r in rows if r["deployable"] == "1"),
+                           key=lambda r: r["fitness"])
+    hb = top(hill)
+    in_sample = st.mean(a - b for a, b in zip(hb["accs"], hill[0]["accs"]))
+
+    by: dict[str, dict[int, float]] = {}
+    for r in csv.DictReader(paths[2].open()):
+        by.setdefault(r["arch"], {})[int(r["seed"])] = float(r["acc"])
+    seeds = sorted(by["seed"])
+    out = [
+        ("hill wall clock", f"hill climb took {round(sum(r['train_s'] for r in hill))} s"),
+        ("random wall clock", f"random search {round(sum(r['train_s'] for r in rand))} s"),
+        ("random rejected", f"{sum(r['deployable'] == '0' for r in rand)} of them rejected"),
+        ("random draws", f"{len(rand) - 1} uniform draws"),
+        ("random average", f"{st.mean(r['acc'] for r in rand if r['deployable'] == '1'):.4f}"),
+        ("in sample gap", f"+{in_sample:.4f} over the baseline"),
+        ("fresh seeds", f"seeds {seeds[0]} to {seeds[-1]}"),
+    ]
+    for name, label in (("seed", "baseline"), ("hill_gpu", "hill climb winner"),
+                        ("random_gpu", "random search winner")):
+        xs = list(by[name].values())
+        out.append((f"{name} rescore", f"| {label} | {st.mean(xs):.4f} | {st.stdev(xs):.4f} |"))
+    for name, label in (("hill_gpu", "hill climb winner"),
+                        ("random_gpu", "random search winner")):
+        d = [by[name][k] - by["seed"][k] for k in seeds]
+        se = st.stdev(d) / math.sqrt(len(d))
+        out.append((f"{name} paired", f"| {label} | {st.mean(d):+.4f} | {se:.4f} | "
+                    f"{st.mean(d) / se:.2f} | {sum(x > 0 for x in d)} of {len(d)} |"))
+    return out
+
+
 def main() -> int:
     rows = load()
     readme = (ROOT / "README.md").read_text()
@@ -195,7 +242,7 @@ def main() -> int:
         print("FAIL: best_genome.json is not the highest-fitness row in the log")
         return 1
 
-    checked = claims(rows) + validation_claims()
+    checked = claims(rows) + validation_claims() + gpu_claims()
     missing = [(what, want) for what, want in checked if want not in readme]
     for what, want in missing:
         print(f"FAIL: README is missing {want!r}  ({what})")

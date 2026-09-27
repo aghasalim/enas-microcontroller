@@ -63,21 +63,29 @@ def main() -> int:
     p.add_argument("--val-n", type=int, default=5000)
     p.add_argument("--batch", type=int, default=128)
     p.add_argument("--threads", type=int, default=4)
+    p.add_argument("--first-seed", type=int, default=0,
+                   help="start of the training seed range, to rescore on seeds the search never saw")
+    p.add_argument("--arch", action="append", default=[], metavar="NAME=PATH",
+                   help="extra genome to retest, compared against the seed genome")
+    p.add_argument("--out", default="validation.csv")
+    p.add_argument("--no-winner", action="store_true", help="skip results/best_genome.json")
     a = p.parse_args()
 
     torch.set_num_threads(a.threads)
     tl, vl = clean_loaders(a.train_n, a.val_n, a.batch)
-    arches = {
-        "seed": seed_genome(),
-        "winner": json.loads((RESULTS / "best_genome.json").read_text()),
-    }
+    arches = {"seed": seed_genome()}
+    if not a.no_winner:
+        arches["winner"] = json.loads((RESULTS / "best_genome.json").read_text())
+    for spec in a.arch:
+        name, path = spec.split("=", 1)
+        arches[name] = json.loads((ROOT / path).read_text())
 
-    out = RESULTS / "validation.csv"
+    out = RESULTS / a.out
     with out.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)
         w.writeheader()
         got: dict[str, list[float]] = {k: [] for k in arches}
-        for s in range(a.seeds):
+        for s in range(a.first_seed, a.first_seed + a.seeds):
             for name, genome in arches.items():
                 torch.manual_seed(s)              # before build, as in the search
                 model = build(genome)
@@ -98,14 +106,15 @@ def main() -> int:
     # Paired, because both architectures are trained from the same
     # initialisation seed. Comparing the two independent spreads instead throws
     # away the pairing and understates what the design can detect.
-    d = [w - v for w, v in zip(got["winner"], got["seed"])]
-    mean_d = st.mean(d)
-    se = st.stdev(d) / math.sqrt(len(d)) if len(d) > 1 else float("nan")
-    wins = sum(x > 0 for x in d)
-    print(f"\npaired differences: {[f'{x:+.4f}' for x in d]}")
-    print(f"gap {mean_d:+.4f}  sd {st.stdev(d):.4f}  se {se:.4f}  "
-          f"t({len(d) - 1}) = {mean_d / se:.2f}")
-    print(f"winner ahead on {wins} of {a.seeds} paired seeds")
+    for name in [k for k in arches if k != "seed"]:
+        d = [w - v for w, v in zip(got[name], got["seed"])]
+        mean_d = st.mean(d)
+        se = st.stdev(d) / math.sqrt(len(d)) if len(d) > 1 else float("nan")
+        wins = sum(x > 0 for x in d)
+        print(f"\n{name} minus seed, paired: {[f'{x:+.4f}' for x in d]}")
+        print(f"gap {mean_d:+.4f}  sd {st.stdev(d):.4f}  se {se:.4f}  "
+              f"t({len(d) - 1}) = {mean_d / se:.2f}")
+        print(f"{name} ahead on {wins} of {a.seeds} paired seeds")
     if len(d) < 10:
         print(f"n = {len(d)}. This bounds the gap loosely and is not a "
               f"substitute for more seeds.")

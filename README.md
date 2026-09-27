@@ -251,11 +251,68 @@ enough to show the direction is real and the magnitude was wrong, and not enough
 to put an interval on it worth quoting.
 
 **The search is a hill climb over 26 trained samples.** With 8 generations, 4
-children and one edit per child it walks a thin path rather than mapping the
-space, and a different seed would very likely land elsewhere. There is no random
-search baseline here, which is the comparison Li and Talwalkar (2019) and Yu et
-al. (2020) show is the one that most often erases a reported NAS gain. Until that
-baseline exists, nothing here separates the search from a lucky walk.
+children and one edit per child it walks a thin path, and a different seed would
+very likely land elsewhere. The CPU run had no random search baseline, which is
+the comparison Li and Talwalkar (2019) and Yu et al. (2020) show most often
+erases a reported NAS gain. The rerun below adds one.
+
+### The rerun with five seeds and a random baseline
+
+The two defects above were the reason for a second run on a rented RTX 3090
+(`make search-gpu`, logs in [`results/search_log_gpu.csv`](results/search_log_gpu.csv),
+[`results/random_log_gpu.csv`](results/random_log_gpu.csv) and
+[`results/run_gpu.log`](results/run_gpu.log)). Same space, same fitness, same
+training budget per candidate. Three things changed:
+
+- every candidate is trained from 5 seeds and ranked on the mean, so one lucky
+  initialisation cannot win a generation
+- validation is carved out of the training split, so the test split is never
+  opened
+- a random search of the same size runs next to the hill climb: the seed genome
+  plus 33 uniform draws from the space, 3 of them rejected as undeployable
+
+The hill climb took 573 s and the random search 664 s of training. Both winners
+were then retrained on seeds 100 to 104, which neither search had seen, with
+[`experiments/validate_winner.py`](experiments/validate_winner.py) on the clean
+split from the retest above ([`results/rescore_gpu.csv`](results/rescore_gpu.csv)).
+That step matters because both winners were picked on the same 5 seeds they were
+scored on, so their search scores carry the same selection bias as section 6's
+first point.
+
+| on seeds 100 to 104 | mean | sd | params |
+| --- | ---: | ---: | ---: |
+| baseline | 0.4712 | 0.0049 | 48,354 |
+| hill climb winner | 0.4960 | 0.0074 | 49,762 |
+| random search winner | 0.4667 | 0.0097 | 44,810 |
+
+| paired against the baseline | gap | se | $t(4)$ | ahead on |
+| --- | ---: | ---: | ---: | ---: |
+| hill climb winner | +0.0249 | 0.0036 | 6.93 | 5 of 5 |
+| random search winner | -0.0045 | 0.0059 | -0.76 | 2 of 5 |
+
+**The hill climb beats random search, and it is not close.** 33 random draws found
+nothing better than the hand baseline. The average deployable random draw scored
+0.3944, so the baseline was already a good point in this space and a random walk
+away from it mostly lands somewhere worse. The mutation search, starting from the
+baseline and changing one thing at a time, found +0.0249 that holds on seeds it
+never saw.
+
+**Selection still inflated the search score.** On its own 5 search seeds the hill
+climb winner was +0.0340 over the baseline. On fresh seeds it is +0.0249, so
+about a quarter of what the search reported was picking the luckiest of 33
+candidates. Five seeds per candidate shrank that bias but did not remove it,
+which is why the fresh seeds are the numbers to quote.
+
+**The 5 seed winner is a different network from the 1 seed winner.** It keeps
+the baseline's widths and strides, turns blocks 0 and 4 into asymmetric
+convolutions so four of the five are, shrinks block 1's kernel from 5 to 3 and
+grows block 3's from 5 to 7
+([`results/best_genome_gpu.json`](results/best_genome_gpu.json)). Section 7 still exports the CPU winner; the GPU winner has not been through the C
+path.
+
+What this still does not show: one search seed each, so both searches are one
+walk, and 5 fresh seeds bound the gap loosely. A second search seed would say
+whether the hill climb finds +0.025 reliably or found it once.
 
 **Nothing has run on hardware.** The network is exported and there is a C
 implementation that matches PyTorch (section 7), but it is float, it has not

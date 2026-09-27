@@ -107,7 +107,37 @@ architecture trained at minute 40 gave the number it gave at minute 5.
 | unchanged from the search | 8,000 training images, 3 epochs, batch 128, `train_micro` | validate_winner.py:62, :64, :65, :85 |
 | time | `train_s` sums to 1,586.0 s, 26.4 min over 10 trainings | `train_s` column |
 
-## What neither run saved
+## Run 3, the 5 seed rerun on a GPU
+
+`make search-gpu` on a rented RunPod RTX 3090, community cloud, image
+`runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`, torch
+2.4.1+cu124. Run on 2026-09-26 between 23:27 and 23:48 UTC. Two
+commands (Makefile, `search-gpu` target):
+
+| | hill climb | random search |
+| --- | --- | --- |
+| command | `controller.py --generations 8 --children 4 --seeds 5 --device cuda --val-from-train` | `controller.py --random 33 --seeds 5 --device cuda --val-from-train` |
+| log | `search_log_gpu.csv` | `random_log_gpu.csv` |
+| rows | 33 | 34, the seed genome and 33 draws |
+| winner | `best_genome_gpu.json` | `best_genome_random_gpu.json`, taken from the log |
+| time | `train_s` sums to 573 s | `train_s` sums to 664 s |
+
+Seeds 0 to 4 for every candidate, ranked on the mean, the per seed
+accuracies in the `accs` column. Validation is the first 2,000 of a
+seed 0 permutation of the train split and training the next 8,000
+(controller.py, `loaders`). The test split is not opened. Console
+output in `run_gpu.log`.
+
+## Run 4, the fresh seed rescore
+
+`experiments/validate_winner.py --no-winner --first-seed 100 --seeds 5
+--arch hill_gpu=results/best_genome_gpu.json --arch
+random_gpu=results/best_genome_random_gpu.json --out rescore_gpu.csv`,
+on the Apple M4 CPU with 4 threads, torch 2.13.0. Seeds 100 to 104,
+which neither search used, on the split seed 1234 carve from Run 2.
+15 trainings, `rescore_gpu.csv`.
+
+## What none of the runs saved
 
 No weights. The search keeps genomes and nothing else
 (export/train_winner.py, docstring lines 3 to 4). `train_winner.py`

@@ -1,0 +1,36 @@
+{
+  "stem_width": 16,
+  "act_shift": 2,
+  "blocks": [
+    {
+      "kind": "shift",
+      "out": 32,
+      "stride": 1,
+      "k": 7
+    },
+    {
+      "kind": "asym",
+      "out": 24,
+      "stride": 2,
+      "k": 5
+    },
+    {
+      "kind": "asym",
+      "out": 160,
+      "stride": 1,
+      "k": 7
+    },
+    {
+      "kind": "asym",
+      "out": 160,
+      "stride": 2,
+      "k": 5
+    },
+    {
+      "kind": "asym",
+      "out": 48,
+      "stride": 2,
+      "k": 5
+    }
+  ]
+}
