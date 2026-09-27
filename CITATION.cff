@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: If you use this work, please cite it as below.
+title: "ENAS for microcontrollers"
+abstract: "Evolutionary neural architecture search under a hard 50k parameter microcontroller budget. Logs every rejected candidate, not just the winner."
+type: software
+authors:
+  - family-names: Mustafazada
+    given-names: Aghasalim
+    orcid: "https://orcid.org/0009-0001-8746-4582"
+    affiliation: "Howest University of Applied Sciences"
+repository-code: "https://github.com/aghasalim/enas-microcontroller"
+url: "https://aghasalim.github.io/"
+license: MIT
