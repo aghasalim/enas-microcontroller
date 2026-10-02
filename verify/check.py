@@ -3,7 +3,7 @@
 # Covers the same subset as the SQL verifier: candidate counts, training
 # minutes, best fitness/accuracy, and the seed-vs-best comparison.
 
-import csv, math, sys, os
+import csv, sys, os
 
 root = sys.argv[1] if len(sys.argv) > 1 else "."
 
