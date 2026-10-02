@@ -29,7 +29,8 @@ FIELDS = ["gen", "cand", "parent", "mutation", "params", "macs", "peak_act",
           "acc", "fitness", "deployable", "train_s", "genome", "accs"]
 
 
-def loaders(train_n: int, val_n: int, batch: int, seed: int, val_from_train: bool = False):
+def loaders(train_n: int, val_n: int, batch: int, seed: int,
+            val_from_train: bool = False) -> tuple[DataLoader, DataLoader]:
     norm = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))
     tf_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(),
