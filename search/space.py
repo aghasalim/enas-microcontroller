@@ -107,7 +107,7 @@ def _mutate_once(genome: dict, rng: random.Random) -> tuple[dict, str]:
     # stride: keep at most three downsamples or the map vanishes
     cur = g["blocks"][i]["stride"]
     new = 1 if cur == 2 else 2
-    if new == 2 and sum(b["stride"] for b in g["blocks"]) >= 8:
+    if new == 2 and sum(b["stride"] == 2 for b in g["blocks"]) >= 3:
         return mutate(genome, rng)
     g["blocks"][i]["stride"] = new
     return g, f"stride block{i} {cur}->{new}"
