@@ -213,3 +213,26 @@ def test_readme_numbers_match_the_log():
     r = subprocess.run([sys.executable, str(ROOT / "check_numbers.py")],
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _blocks(strides):
+    return {"stem_width": 24, "act_shift": 4,
+            "blocks": [{"kind": "asym", "out": 32, "stride": s, "k": 3} for s in strides]}
+
+
+def test_stride_cap_is_three_downsamples_at_any_depth():
+    """The cap used to be sum(strides) >= 8, which depends on depth: four
+    blocks could take a fourth downsample and seven blocks were stuck at one."""
+    from search.space import mutate
+
+    n_s2 = lambda g: sum(b["stride"] == 2 for b in g["blocks"])  # noqa: E731
+    shallow = _blocks([2, 2, 2, 1])
+    deep = _blocks([2, 1, 1, 1, 1, 1, 1])
+    deep_reached = set()
+    for seed in range(400):
+        child, _ = mutate(shallow, random.Random(seed))
+        assert n_s2(child) <= 3
+        child, how = mutate(deep, random.Random(seed))
+        if how.startswith("stride"):
+            deep_reached.add(n_s2(child))
+    assert 2 in deep_reached
