@@ -1,25 +1,26 @@
 # ENAS for microcontrollers
 
-**Evolutionary architecture search under a hard 50,000 parameter budget, with
-the failed candidates and the search's own defects in the log.**
+Evolutionary architecture search under a hard 50,000 parameter budget. I kept
+the failed candidates and the search's own flaws in the log.
 
 [![ci](https://github.com/aghasalim/enas-microcontroller/actions/workflows/ci.yml/badge.svg)](https://github.com/aghasalim/enas-microcontroller/actions/workflows/ci.yml)
 [![licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23003622.svg)](https://doi.org/10.5281/zenodo.23003622)
 
-A hand-written baseline for a Cortex-M class device is mutated one edit at a
-time, each child is trained briefly on CIFAR-10, and anything that would not fit
-the device budget is rejected before a gradient step is spent on it. The search
-improved the baseline by 3.7 accuracy points at equal footprint. It also selected
-on the test split, ran one training seed, and evaluated on 2,000 images, and
-those three facts are large enough that most of this document is about them.
+I started from a baseline I wrote by hand for a Cortex-M class device and
+mutated it one edit at a time. Each child gets a short training run on CIFAR-10.
+Anything that wouldn't fit the device budget gets rejected before a single
+gradient step is spent on it. The search improved the baseline by 3.7 accuracy
+points at the same footprint. But it also selected on the test split, used one
+training seed, and evaluated on only 2,000 images. Those three problems are big
+enough that most of this README is about them.
 
-All 33 candidates, including the 7 rejected and the 4 evaluated twice, are in
-[`results/search_log.csv`](results/search_log.csv). Every number and figure below
-is derived from that file, and [`check_numbers.py`](check_numbers.py) fails the
-build if the two disagree. The published figures are also recomputed from the
-raw logs by independent implementations in `verify/`, and CI fails on any
-disagreement.
+All 33 candidates are in [`results/search_log.csv`](results/search_log.csv),
+including the 7 rejected and the 4 evaluated twice. Every number
+and figure below comes from that file, and [`check_numbers.py`](check_numbers.py)
+fails the build if they disagree. The published figures are also recomputed from
+the raw logs by separate implementations in `verify/`, and CI fails if anything
+disagrees.
 
 ## 1. Objective
 
@@ -31,18 +32,18 @@ maximises
 $$\mathcal{F}(m) = \mathrm{Acc}(m) - \beta \log_{10} P(m) - \gamma \log_{10} M(m),
 \qquad \beta = \gamma = 0.02$$
 
-subject to two constraints that are enforced as hard rejections:
+with two constraints. A candidate that breaks either one is rejected outright.
 
 $$P(m) \le 50{,}000 \qquad\text{and}\qquad P(m) + A(m) \le 250\text{ KB at int8}$$
 
-A model that breaches either cannot be flashed at all, so it scores $-\infty$. Soft penalties let an
-undeployable model win whenever its accuracy advantage exceeds the deduction,
-which measures the wrong thing. The rejection also runs before training, so an
-infeasible candidate costs no compute.
+A model that breaks either one can't be flashed at all, so it scores $-\infty$. I didn't use soft
+penalties, because then an undeployable model could still win whenever its
+accuracy gain is bigger than the penalty. The rejection also happens before
+training, so an infeasible candidate costs no compute.
 
-$A(m)$ is measured with forward hooks as the largest tensor any module emits. Weights are the number people quote; activations are the
-number that makes the deployment fail. A real arena allocator does better by
-reusing buffers, so this is an upper bound on the working set.
+I measure $A(m)$ with forward hooks as the largest tensor any module outputs. People usually quote the weight count, but it's
+the activations that make a deployment fail. A real arena allocator would do
+better by reusing buffers, so this is an upper bound on the working set.
 
 ## 2. Search space
 
@@ -53,12 +54,13 @@ A genome is a plain dict:
  "blocks": [{"kind": "shift", "out": 48, "stride": 1, "k": 3}, ...]}
 ```
 
-so every mutation is an edit that can be logged, diffed and replayed, and every
-architecture in the run is reconstructible from its genome alone. Replaying the
-33 logged mutations reproduces
-[`results/best_genome.json`](results/best_genome.json) exactly, which is a test.
+That way every mutation is an edit I can log, diff and replay, and I can rebuild
+any architecture in the run from its genome alone. Replaying the 33 logged
+mutations reproduces
+[`results/best_genome.json`](results/best_genome.json) exactly, and there's a test for that.
 
-Seven operators, one edit per child so a fitness change has one cause:
+There are seven operators. Each child gets exactly one edit, so any change in
+fitness has a single cause.
 
 | operator | edit |
 | --- | --- |
@@ -70,21 +72,21 @@ Seven operators, one edit per child so a fitness change has one cause:
 | `drop` | remove block i |
 | `stride` | flip one block between stride 1 and 2, capped at 3 downsamples |
 
-`kernel` only targets `asym` blocks. Shift blocks carry no spatial weights, so
-offering them a kernel edit produces a model identical to its parent and burns a
-training slot. Both block types are chosen for what they cost on the device:
+`kernel` only targets `asym` blocks. Shift blocks have no spatial weights, so a
+kernel edit on one gives a model identical to its parent and wastes a training
+slot. I picked both block types because they're cheap on the device.
 
-- **`shift`** replaces the spatial half of a convolution with `torch.roll` over
-  five channel groups, following Wu et al. (2018). No weights, no multiplies, and
-  on the device it is pointer arithmetic.
-- **`asym`** buys a $k \times k$ depthwise receptive field as $1 \times k$ then
+- `shift` replaces the spatial half of a convolution with `torch.roll` over five
+  channel groups, following Wu et al. (2018). It has no weights and no
+  multiplies, and on the device it's just pointer arithmetic.
+- `asym` gets a $k \times k$ depthwise receptive field from a $1 \times k$ then a
   $k \times 1$, the factorisation from Szegedy et al. (2016) applied to the
-  depthwise convolutions of Howard et al. (2017). Ten weights per channel where a full kernel needs 25 at $k = 5$, and the intermediate never materialises at full width, which
-  matters more for peak SRAM than the weight saving does.
+  depthwise convolutions of Howard et al. (2017). It needs ten weights per channel where a full kernel needs 25 at $k = 5$. The intermediate also never exists at full width,
+  and that matters more for peak SRAM than the weight saving.
 
 The activation is a ReLU6 with a leak of $2^{-s}$. In an int8 pipeline that
-constant is an arithmetic right shift with no multiply, and the clamp keeps
-the output range fixed so the activation folds into requantisation.
+constant is an arithmetic right shift with no multiply. The clamp keeps the
+output range fixed, so the activation folds into requantisation.
 
 ## 3. Protocol
 
@@ -102,10 +104,9 @@ the output range fixed so the activation folds into requantisation.
 | hardware | Apple M4, CPU only, 4 threads, torch 2.13.0 |
 | wall clock | 65 minutes of training over 33 candidates |
 
-The seed is set before the model is constructed, which is what puts
-weight initialisation inside the seed. Four genomes were evaluated twice during
-the run and all four returned byte-identical accuracy, which is the evidence that
-this holds.
+I set the seed before building the model, so weight initialisation is covered
+by the seed. Four genomes got evaluated twice during the run, and all four gave
+byte-identical accuracy, which shows this works.
 
 ## 4. Result
 
@@ -114,20 +115,21 @@ this holds.
 | seed, hand written | 0.4655 | 48,354 | 1,920,768 | 12,288 | 0.2461 |
 | **best found** | **0.5025** | 48,546 | **1,761,024** | 12,288 | **0.2839** |
 
-3.7 accuracy points and 8.3% fewer multiply-accumulates for 192 more
-parameters, found at generation 5, candidate 2.
+The winner gains 3.7 accuracy points and uses 8.3% fewer multiply-accumulates
+for 192 more parameters. It was found at generation 5, candidate 2.
 
-That 3.7 is the search's own figure and it is inflated. Retested on a split
-held out of the training data, over five training seeds, the gap is
-**2.1 points**, not 3.7. The winner is still genuinely better, on all five
-seeds, but the search overstated its own result by 1.8x. Section 6 has the
-retest and the reason.
+That 3.7 is what the search itself reported, and it's too high. When I retested
+on a split held out of the training data, over five training seeds, the gap
+was **2.1 points** instead of 3.7. The winner is still better on all five seeds, but
+the search overstated its own result by 1.8x. Section 6 has the retest and the
+reason.
 
-Read 0.5025 as a ranking score. Three epochs on 16% of the
-training set at under 50,000 parameters is a budget chosen to make a 33 candidate
-search cost an hour. It is enough to order architectures and
-nowhere near enough to say what one is worth. Section 6 retrains the winners
-properly, 12 epochs on 40,000 images, and that is where the real accuracies are.
+Treat 0.5025 as a ranking score. Three epochs on 16% of the
+training set at under 50,000 parameters is a budget I picked so a 33 candidate
+search would take about an hour. That's enough to put architectures in order,
+but not enough to say what any of them is really worth. In section 6 I retrain
+the winners properly, 12 epochs on 40,000 images, and those are the real
+accuracies.
 
 ![search trajectory](results/figures/search-trajectory.png)
 
@@ -135,80 +137,82 @@ properly, 12 epochs on 40,000 images, and that is where the real accuracies are.
 
 ![seed against winner, block by block](results/figures/topology.png)
 
-Two edits separate the winner from the baseline: block 0 went from a zero-parameter shift block to a learned asymmetric depthwise block, and block 4
-gained a stride. The path was not two steps. Block 3's stride went 2 to 1 in
-generation 1, the first improvement found, then back to 2 in generation 5, the
-last. Four generations were spent on a change that was undone.
+Two edits separate the winner from the baseline. Block 0 went from a zero-parameter shift block to a learned asymmetric depthwise block, and block 4
+gained a stride. It didn't get there in two steps, though. Block 3's stride went
+from 2 to 1 in generation 1, which was the first improvement found, and then back
+to 2 in generation 5, the last one. So four generations went into a change that
+was later undone.
 
-Learned spatial filtering pays at high resolution and not at low. Both
-conversions below were drawn from the same parent in the same generation, so they form a controlled pair:
+Learned spatial filtering helps at high resolution but not at low resolution.
+Both conversions below came from the same parent in the same generation, so they
+make a fair pair.
 
 | edit | position | resolution | accuracy | change |
 | --- | --- | --- | ---: | ---: |
 | `kind block0 shift->asym` | first block | 16x16 | 0.5045 | +0.0150 |
 | `kind block4 shift->asym` | last block | 4x4 | 0.4825 | -0.0070 |
 
-Parent accuracy 0.4895. The last-block conversion was drawn again in generation 8
+Parent accuracy was 0.4895. The last-block conversion came up again in generation 8
 from a stronger parent and lost again (0.5005 against 0.5025), so the direction
-held twice. Both changes are within the noise band quantified in section 6.
+held both times. Both changes are inside the noise band I work out in section 6.
 
-The gain is from having learned filters early, not from a larger receptive
-field. Once block 0 was learned, widening its kernel from 3 to 7 in generation 7
-dropped accuracy from 0.5025 to 0.4695.
+The gain seems to come from having learned filters early. A bigger receptive
+field didn't help. Once block 0 was learned, widening its kernel from 3 to 7 in
+generation 7 dropped accuracy from 0.5025 to 0.4695.
 
-The activation default survived but was not swept cleanly. Against the
+The default activation survived, but I didn't sweep it cleanly. Against the
 generation 1 parent the default $2^{-4}$ beat $2^{-2}$ (0.4640) and $2^{-5}$
 (0.4815), and against the final parent it beat $2^{-5}$ again (0.4905 against
-0.5025). But $2^{-3}$ was only ever tried against the seed, the weakest parent in
-the run, where it won (0.4790 against 0.4655). $2^{-3}$ is untested on any strong
-topology.
+0.5025). But $2^{-3}$ was only ever tried against the seed, which was the weakest
+parent in the run, and there it won (0.4790 against 0.4655). I haven't tested
+$2^{-3}$ on any strong topology.
 
-**The parameter cap bound the search; the SRAM budget never did.**
+The parameter cap was what limited the search. The SRAM budget never did.
 
 ![budget](results/figures/budget.png)
 
-All 7 rejections were the parameter cap. No candidate came near the 250 KB SRAM
-budget: the worst working set observed was 69.5 KB and the winner sits at
-59.4 KB, so the search spent the run pressed against one constraint while the
-other had 3.6x headroom. Raising the parameter cap until the two bind together is
-the obvious next run.
+All 7 rejections came from the parameter cap. No candidate got close to the
+250 KB SRAM budget. The worst working set I saw was 69.5 KB, and the winner is at
+59.4 KB. So the search spent the whole run up against one constraint while the
+other had 3.6x headroom. The next run I'd do is raise the parameter cap until both
+limits bind at once.
 
 ## 6. Threats to validity
 
-This section is the reason to trust or distrust section 4, and three of the
-problems in it are plain defects in the setup.
+This section decides how much to trust section 4, and three of the problems
+here are just mistakes in how I set things up.
 
-Selection ran on the test split. `loaders()` builds the validation set from
+I ran selection on the test split. `loaders()` builds the validation set from
 `CIFAR10(train=False)`, so every candidate was ranked on 2,000 images from the
-official CIFAR-10 test set. That is model selection on test. The relative
-comparisons in section 5 are less affected, since all candidates were scored on
-the same 2,000 images, but 0.5025 is an optimistically biased estimate of
-held-out accuracy and should not be quoted as one.
+official CIFAR-10 test set. That's model selection on test. The relative
+comparisons in section 5 are less affected, since every candidate was scored on
+the same 2,000 images. But 0.5025 is an optimistic estimate of held-out accuracy
+and shouldn't be quoted as one.
 
-Nearly half the ranking signal is evaluation noise. Accuracy on $n = 2{,}000$
-has a binomial standard deviation of about 0.0112 near $p = 0.48$. The observed
-standard deviation across the 26 trained candidates is 0.0175. Evaluation noise
-therefore accounts for roughly 41% of the observed variance between candidates,
-leaving about 0.0134 for architecture, initialisation and everything else
-combined. Any single comparison in section 5 smaller than about 0.02 is not
-separable from noise on this evidence.
+Close to half of the ranking signal is evaluation noise. Accuracy on
+$n = 2{,}000$ has a binomial standard deviation of about 0.0112 near $p = 0.48$.
+The observed standard deviation across the 26 trained candidates is 0.0175. So
+evaluation noise explains roughly 41% of the variance between candidates. That
+leaves about 0.0134 for architecture, initialisation and everything else
+together. With this evidence, I can't separate any single comparison in section
+5 smaller than about 0.02 from noise.
 
-The headline gap is thinner than it looks. 0.0370 against a pooled standard
-error of 0.0158 is $z = 2.34$, and it is the maximum of 26 draws, so the
-appropriate correction for having taken a maximum makes it weaker still.
+The headline gap is weaker than it looks. 0.0370 against a pooled standard
+error of 0.0158 is $z = 2.34$. It's also the maximum of 26 draws, and correcting
+for taking a maximum makes it weaker still.
 
-One training seed. Every candidate was trained from seed 0, so architecture
-quality is confounded with initialisation luck. Nothing in the search log
-separates the two.
+I only used one training seed. Every candidate was trained from seed 0, so
+architecture quality is mixed up with initialisation luck, and nothing in the
+search log can separate them.
 
 ### What the retest found
 
-[`experiments/validate_winner.py`](experiments/validate_winner.py) exists to
+I wrote [`experiments/validate_winner.py`](experiments/validate_winner.py) to
 measure the first and third of those. It retrains the baseline and the winner
-with validation carved out of the training split, never touching the test split,
-across 5 training seeds. Everything else, the optimiser, schedule,
-augmentation, epoch count and 8,000 image budget, is what the search used, so
-the only things that change are the split and the seed.
+with validation taken from the training split, never touching the test split,
+across 5 training seeds. The optimiser, schedule, augmentation, epoch count and
+8,000 image budget are the same as in the search, so only the split and the seed
+change.
 
 ![clean split retest](results/figures/validation.png)
 
@@ -222,57 +226,59 @@ the only things that change are the split and the seed.
 | +0.0120 | +0.0016 | +0.0320 | +0.0274 | +0.0322 |
 
 Mean +0.0210, standard error 0.0061, paired $t(4) = 3.45$, two-sided
-$p = 0.026$, and the winner is ahead on 5 of 5 seeds. The pairing matters: both
+$p = 0.026$, and the winner is ahead on 5 of 5 seeds. Pairing matters here. Both
 architectures share an initialisation seed, so the difference is measured within each seed.
 
-Three things follow.
+I took three things from this.
 
-The result holds. The winner really is better than the hand-written
-baseline, on every seed tried, and section 5's structural reading survives.
+The result holds up. The winner really is better than my hand-written baseline
+on every seed I tried, and what I said about its structure in section 5 still
+stands.
 
-The search overstated it by 1.8x. +0.0210 on a clean split against +0.0370
-as reported. Most of that difference is the test-split selection: the search
-picked the candidate that scored best on the same 2,000 images it was judged on.
+The search overstated it by 1.8x. The clean split gives +0.0210, and the search
+reported +0.0370. Most of that difference comes from selecting on the test split.
+The search picked the candidate that did best on the same 2,000 images it was
+judged on.
 
-A single-seed comparison could not have resolved this. The winner's own
+A single-seed comparison couldn't have settled this. The winner's own
 spread across seeds is 0.0124, which is 59% of the 0.0210 effect. Every one of
-the 33 decisions in the search was made from one seed, on noise more than half
-the size of the thing being measured. At seed 1 the gap is +0.0016, effectively
-nothing; had the search run from that seed this mutation would probably not have
-been kept.
+the 33 decisions in the search was made from one seed, with noise more than half
+the size of what was being measured. At seed 1 the gap is +0.0016, which is
+basically nothing. If the search had run from that seed, it probably wouldn't
+have kept this mutation.
 
-Five seeds is a weak test by construction and bounds the gap loosely. It is
-enough to show the direction is real and the magnitude was wrong, and not enough
-to put an interval on it worth quoting.
+Five seeds is a weak test, and it only bounds the gap loosely. It's enough to
+show the direction is real and the size was wrong. It isn't enough to give an
+interval worth quoting.
 
 The search is a hill climb over 26 trained samples. With 8 generations, 4
-children and one edit per child it walks a thin path, and a different seed would
-very likely land elsewhere. The CPU run had no random search baseline, which is
-the comparison Li and Talwalkar (2019) and Yu et al. (2020) show most often
-erases a reported NAS gain. The rerun below adds one.
+children and one edit per child it only explores a narrow path, and a different
+seed would probably end up somewhere else. The CPU run also had no random search
+baseline. Li and Talwalkar (2019) and Yu et al. (2020) show that this comparison
+is what most often wipes out a reported NAS gain. The rerun below adds one.
 
 ### The rerun with five seeds and a random baseline
 
-The two defects above were the reason for a second run on a rented RTX 3090
+Because of those two problems I did a second run on a rented RTX 3090
 (`make search-gpu`, logs in [`results/search_log_gpu.csv`](results/search_log_gpu.csv),
 [`results/random_log_gpu.csv`](results/random_log_gpu.csv) and
-[`results/run_gpu.log`](results/run_gpu.log)). Same space, same fitness, same
-training budget per candidate. Three things changed:
+[`results/run_gpu.log`](results/run_gpu.log)). The search space, fitness and
+training budget per candidate are the same. I changed three things.
 
-- every candidate is trained from 5 seeds and ranked on the mean, so one lucky
-  initialisation cannot win a generation
-- validation is carved out of the training split, so the test split is never
-  opened
-- a random search of the same size runs next to the hill climb: the seed genome
-  plus 33 uniform draws from the space, 3 of them rejected as undeployable
+- Every candidate is trained from 5 seeds and ranked on the mean, so one lucky
+  initialisation can't win a generation.
+- Validation comes from the training split, so the test split is never opened.
+- A random search of the same size runs next to the hill climb. It uses the seed
+  genome plus 33 uniform draws from the space, with 3 of them rejected as
+  undeployable.
 
-The hill climb took 573 s and the random search 664 s of training. Both winners
-were then retrained on seeds 100 to 104, which neither search had seen, with
+The hill climb took 573 s and the random search 664 s of training. I then
+retrained both winners on seeds 100 to 104, which neither search had seen, with
 [`experiments/validate_winner.py`](experiments/validate_winner.py) on the clean
 split from the retest above ([`results/rescore_gpu.csv`](results/rescore_gpu.csv)).
-That step matters because both winners were picked on the same 5 seeds they were
-scored on, so their search scores carry the same selection bias as section 6's
-first point.
+I needed that step because both winners were picked on the same 5 seeds they were
+scored on. Their search scores have the same selection bias as the first problem
+in section 6.
 
 | on seeds 100 to 104 | mean | sd | params |
 | --- | ---: | ---: | ---: |
@@ -285,31 +291,31 @@ first point.
 | hill climb winner | +0.0249 | 0.0036 | 6.93 | 5 of 5 |
 | random search winner | -0.0045 | 0.0059 | -0.76 | 2 of 5 |
 
-The hill climb beats random search, and it is not close. 33 random draws found
-nothing better than the hand baseline. The average deployable random draw scored
-0.3944, so the baseline was already a good point in this space and a random walk
-away from it mostly lands somewhere worse. The mutation search, starting from the
-baseline and changing one thing at a time, found +0.0249 that holds on seeds it
-never saw.
+The hill climb clearly beats random search. 33 random draws found nothing better
+than the hand baseline. The average deployable random draw scored 0.3944. So the
+baseline was already a good point in this space, and moving away from it at
+random mostly makes things worse. The mutation search starts from the baseline
+and changes one thing at a time, and it found +0.0249 that holds on seeds it never
+saw.
 
-Selection still inflated the search score. On its own 5 search seeds the hill
-climb winner was +0.0340 over the baseline. On fresh seeds it is +0.0249, so
-about a quarter of what the search reported was picking the luckiest of 33
-candidates. Five seeds per candidate shrank that bias but did not remove it,
-which is why the fresh seeds are the numbers to quote.
+Selection still pushed the search score up. On its own 5 search seeds the hill
+climb winner was +0.0340 over the baseline. On fresh seeds it's +0.0249. So about
+a quarter of what the search reported came from picking the luckiest of 33
+candidates. Using five seeds per candidate made that bias smaller but didn't get
+rid of it, so the fresh seed numbers are the ones I'd quote.
 
-The 5 seed winner is a different network from the 1 seed winner. It keeps
-the baseline's widths and strides, turns blocks 0 and 4 into asymmetric
-convolutions so four of the five are, shrinks block 1's kernel from 5 to 3 and
-grows block 3's from 5 to 7
-([`results/best_genome_gpu.json`](results/best_genome_gpu.json)). Section 7 still exports the CPU winner; the GPU winner has not been through the C
+The 5 seed winner is a different network from the 1 seed winner. It keeps the
+baseline's widths and strides and turns blocks 0 and 4 into asymmetric
+convolutions, so four of the five blocks are asymmetric. It also shrinks block 1's
+kernel from 5 to 3 and grows block 3's from 5 to 7
+([`results/best_genome_gpu.json`](results/best_genome_gpu.json)). Section 7 still exports the CPU winner, and the GPU winner hasn't been through the C
 path.
 
 ### Two more search seeds, and full training
 
-A single search could have found +0.025 once, so the hill climb was run twice
-more from search seeds 1 and 2 on an RTX A5000, each with its own mutation
-order, training seeds and validation carve. Each winner was rescored on seeds
+One search finding +0.025 could have been luck, so I ran the hill climb twice
+more from search seeds 1 and 2 on an RTX A5000. Each run had its own mutation
+order, training seeds and validation split. I rescored each winner on seeds
 100 to 104 exactly as above
 ([`results/rescore_gpu_seeds12.csv`](results/rescore_gpu_seeds12.csv)).
 
@@ -319,14 +325,15 @@ order, training seeds and validation carve. Each winner was rescored on seeds
 | 1 | +0.0292 | 0.0027 | 5 of 5 |
 | 2 | +0.0078 | 0.0038 | 4 of 5 |
 
-Every search found something better than the baseline, and two of three found
-about +0.025 to +0.03. The third found a network only slightly better, with
-$t(4) = 2.04$, which I would not claim. The three winners are different
-networks; what they share is more asymmetric blocks than the baseline.
+Every search found something better than the baseline, and two of the three
+found about +0.025 to +0.03. The third found a network that's only slightly
+better, with $t(4) = 2.04$, and I wouldn't claim that one. The three winners are
+different networks. What they have in common is more asymmetric blocks than the
+baseline.
 
-All of that is still the 3 epoch ranking budget. To see what the networks are
-actually worth, the baseline, the CPU winner and the search seed 0 GPU winner
-were each trained properly with
+All of that still uses the 3 epoch ranking budget. To see what the networks are
+actually worth, I trained the baseline, the CPU winner and the search seed 0 GPU
+winner properly with
 [`export/train_winner.py`](export/train_winner.py): 12 epochs, 40,000 images,
 5,000 held out of the training split, 3 seeds
 ([`results/full_train.csv`](results/full_train.csv)).
@@ -337,37 +344,37 @@ were each trained properly with
 | CPU winner | 0.7498 | 0.7412 | 0.7312 | 0.7407 |
 | GPU winner | 0.7642 | 0.7604 | 0.7682 | 0.7643 |
 
-**At full training the GPU winner is 4.6 points better than the baseline**, on
-every seed, at 49,762 parameters against 48,354. The gap grows with training, and a ranking artefact would shrink. The CPU winner is 2.2 points better, which matches the retest above. This is
-the first accuracy this repository states as a result: 76.4% on 5,000 held out
-CIFAR-10 images under a 50k parameter budget.
+At full training the GPU winner is 4.6 points better than the baseline on
+every seed, at 49,762 parameters against 48,354. The gap gets bigger with more training. If it were just a ranking artefact I'd expect it to shrink. The CPU winner is 2.2 points better, which matches the retest above. This is
+the first accuracy I report as an actual result in this repo. It's
+76.4% on 5,000 held out CIFAR-10 images under a 50k parameter budget.
 
-What this still does not show: 3 search seeds and 3 training seeds bound the
-numbers loosely, and none of it has run on a microcontroller.
+There's still a lot this doesn't show. 3 search seeds and 3 training seeds only
+bound the numbers loosely, and none of it has run on a microcontroller.
 
-Nothing has run on hardware. The network is exported and there is a C
-implementation that matches PyTorch (section 7), but it is float, it has not
-been quantised, there is no ARM cross build, and nothing has been flashed. Every
-KB figure is a projection from a float graph; nothing was measured on a device.
+Nothing has run on hardware yet. I exported the network and wrote a C
+implementation that matches PyTorch (section 7). But it's float, it isn't
+quantised, there's no ARM cross build, and nothing has been flashed. Every KB
+figure is a projection from a float graph, and none of it was measured on a device.
 The int8 numbers assume one byte per weight and per activation, which is what
 CMSIS-NN gives you (Lai et al., 2018).
 
 ## 7. Export and the C implementation
 
-The search optimises a cost model. This section is about whether that cost model
-describes anything real.
+The search optimises a cost model, and here I check whether that cost model
+matches anything real.
 
 [`export/export_c.py`](export/export_c.py) folds batch norm into the convolution
-in front of it and flattens the network into a table of 37 ops with every shape
-resolved, walking the genome the same way `search.space.build` does.
-[`firmware/micronet.c`](firmware/micronet.c) interprets that table. The network
-exported is the 5 seed GPU winner from section 6 with trained weights,
+before it and flattens the network into a table of 37 ops with every shape
+worked out. It walks the genome the same way `search.space.build` does.
+[`firmware/micronet.c`](firmware/micronet.c) interprets that table. The exported
+network is the 5 seed GPU winner from section 6 with trained weights,
 [`results/winner.pt`](results/winner.pt), 12 epochs on 40,000 images, seed 0.
 Earlier versions of this section exported the CPU winner at a random
-initialisation, which checks the arithmetic but not a network anyone would ship.
-Neither file
-contains a transcribed copy of the architecture, because a hand transcription is
-how the two drift apart.
+initialisation. That checks the arithmetic, but it's not a network anyone would
+ship. Neither file
+has a hand-copied version of the architecture, because copying by hand is how the
+two would drift apart.
 
 | check | result |
 | --- | --- |
@@ -376,26 +383,26 @@ how the two drift apart.
 | toolchains | gcc and clang, both at `-Wall -Wextra -Wpedantic -Werror` |
 | host latency | 3.14 ms per image on an M4 core |
 
-The golden outputs come from the unfolded PyTorch model while the C runs the
-folded table, so a pass covers the folding algebra and every kernel at once.
-Half the golden inputs are scaled up deliberately: without them no activation
-reaches the ReLU6 ceiling, and deleting the clamp from the C passed the test.
-It did pass, until that was fixed. The exporter now refuses to write a golden
-set that leaves the clamp unexercised, and one test in the suite breaks a kernel
-on purpose and asserts the C test rejects it, because a check that cannot fail is
-not evidence.
+The golden outputs come from the unfolded PyTorch model, and the C runs the
+folded table. So a pass checks the folding algebra and every kernel in one go.
+I scaled up half the golden inputs on purpose. Without them no activation reaches
+the ReLU6 ceiling, and I found that deleting the clamp from the C still passed the
+test. It kept passing until I fixed that. Now the exporter won't write a golden
+set that leaves the clamp unexercised. There's also a test that breaks a kernel
+on purpose and checks that the C test rejects it, because a check that can't fail
+doesn't prove anything.
 
 The cost model undercharges by 1.4x. The fitness function scored the winner
 at 60.6 KB, weights plus one peak activation. The reference implementation needs
-84.1 KB at int8, because it ping-pongs between two full size buffers and holds a
-third for the residual, and never reuses any of them. Both fit 250 KB, so the
-search's conclusions stand, but the metric it optimised is not the number a
-deployment pays. An arena allocator that reuses buffers would close most of the
-gap, and that is the real fix.
+84.1 KB at int8. It switches back and forth between two full size buffers, keeps
+a third for the residual, and never reuses any of them. Both fit in 250 KB, so
+the search's conclusions still hold. But the number the search optimised isn't
+what a deployment actually costs. An arena allocator that reuses buffers would
+close most of the gap, and that's the proper fix.
 
-What is still missing: quantisation, an ARM cross build, and a device. There is
-no ARM toolchain on the machine that ran the searches or in CI, so the Arduino
-path in [`firmware/bench.cpp`](firmware/bench.cpp) is structured to work but unverified, and the host latency above is an M4 core, which bounds nothing
+Still missing are quantisation, an ARM cross build and a device. Neither the
+machine that ran the searches nor CI has an ARM toolchain. So the Arduino path in
+[`firmware/bench.cpp`](firmware/bench.cpp) is set up to work but unverified. The host latency above is from an M4 core, which says nothing
 about a Cortex-M.
 
 ## 8. Search efficiency
@@ -403,24 +410,24 @@ about a Cortex-M.
 ![operator yield](results/figures/operators.png)
 
 `insert` was drawn 5 times and produced 0 trainable children. At roughly
-48,500 parameters against a 50,000 cap, adding a block cannot fit, so the operator
-was dead weight for the whole run. It cost no training time, since the budget
-check precedes training, but it consumed 5 of 32 child slots. Pairing an insertion
-with a compensating width reduction would make it usable.
+48,500 parameters against a 50,000 cap, there's no room for another block, so the
+operator was useless for the whole run. It didn't cost training time, since the
+budget check happens before training, but it used up 5 of 32 child slots. If I
+paired an insertion with a matching width reduction, it could actually be used.
 
-4 genomes were evaluated twice, for 9 minutes of duplicated training. The
-mutation operator retries when a child equals its parent but never compares
-against everything already seen, so the search re-derived four known points. A
-memo keyed on the genome removes this. Those duplicates did buy the determinism
-evidence in section 3.
+4 genomes were evaluated twice, which meant 9 minutes of duplicated training. The
+mutation operator retries when a child is the same as its parent, but it never
+checks against everything already seen. So the search found four known points
+again. A memo keyed on the genome would fix this. On the plus side, those
+duplicates gave me the determinism evidence in section 3.
 
-5 of the 8 generations produced no improvement. All the gain is in generations
+5 of the 8 generations didn't improve anything. All the gain is in generations
 1, 4 and 5.
 
-The fitness function ranked the winner 4th by accuracy. Two candidates reached
-0.5050 and one 0.5045, all with more compute, and the MAC term preferred 0.5025 at
-1,761,024 MACs over 0.5050 at 2,570,496. That trade is the objective doing what it
-was written to do, and it is visible in the log.
+The fitness function ranked the winner 4th by accuracy. Two candidates reached 0.5050 and one
+reached 0.5045, all with more compute. The MAC term preferred 0.5025 at
+1,761,024 MACs over 0.5050 at 2,570,496. That's the objective working the way I
+wrote it, and you can see it in the log.
 
 ## 9. Reproducing
 
@@ -434,28 +441,28 @@ make check
 ```
 
 `make search` writes `results/search_log.csv` and `results/best_genome.json`.
-`make figures` redraws every figure above from that log and trains nothing.
+`make figures` redraws every figure above from that log without training anything.
 `make check` re-derives every quoted number from the log and exits non-zero on the
-first disagreement. The suite additionally rebuilds all 33 logged genomes and
-asserts each still produces its logged parameter count, MAC count and peak
-activation, and pins the seed model's forward pass, because cost checks alone
-cannot see a change to the arithmetic.
+first disagreement. The test suite also rebuilds all 33 logged genomes and checks
+that each one still gives its logged parameter count, MAC count and peak
+activation. It also pins the seed model's forward pass, because cost checks by
+themselves can't catch a change to the arithmetic.
 
-Run pinned to 4 threads. These models are small enough that thread overhead costs
-more than the extra parallelism returns, timed before the run. Per-candidate wall
-clock is the `train_s` column.
+I pinned the run to 4 threads. These models are small enough that thread overhead
+costs more than the extra parallelism gives back, which I timed before the run.
+Per-candidate wall clock is in the `train_s` column.
 
-What the two runs in `results/` actually were, setting by setting with the
-line that set each one, is in [`results/runs.md`](results/runs.md).
+I wrote down exactly what the two runs in `results/` were, setting by setting with
+the line that set each one, in [`results/runs.md`](results/runs.md).
 
 ## 10. Related work
 
 This is a small evolutionary search in the style of Real et al. (2019), applied to
-the deployment constraint of Lin et al. (2020). It is not competitive with either
-and is not presented as a comparison: the training budget here is roughly three
-orders of magnitude short of what those results required, and per Lindauer and
-Hutter (2020) a comparison without a shared training budget and a random search
-baseline is not a comparison.
+the deployment constraint of Lin et al. (2020). It doesn't compete with either one,
+and I'm not presenting it as a comparison. My training budget is roughly three
+orders of magnitude below what those results needed. Following Lindauer and
+Hutter (2020), comparing without a shared training budget and a random search
+baseline wouldn't mean much.
 
 - Zoph and Le. Neural Architecture Search with Reinforcement Learning. ICLR 2017.
 - Real, Aggarwal, Huang and Le. Regularized Evolution for Image Classifier
