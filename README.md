@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.jpg" alt="Line drawing of a microcontroller chip with a small network inside, under a tree of rejected candidate networks" width="100%"></p>
+
 # ENAS for microcontrollers
 
 Evolutionary architecture search under a hard 50,000 parameter budget. I kept
@@ -21,6 +23,22 @@ and figure below comes from that file, and [`check_numbers.py`](check_numbers.py
 fails the build if they disagree. The published figures are also recomputed from
 the raw logs by separate implementations in `verify/`, and CI fails if anything
 disagrees.
+
+<details>
+<summary>Contents</summary>
+
+- [1. Objective](#1-objective)
+- [2. Search space](#2-search-space)
+- [3. Protocol](#3-protocol)
+- [4. Result](#4-result)
+- [5. What changed, and what the ablations support](#5-what-changed-and-what-the-ablations-support)
+- [6. Threats to validity](#6-threats-to-validity)
+- [7. Export and the C implementation](#7-export-and-the-c-implementation)
+- [8. Search efficiency](#8-search-efficiency)
+- [9. Reproducing](#9-reproducing)
+- [10. Related work](#10-related-work)
+
+</details>
 
 ## 1. Objective
 
