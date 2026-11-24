@@ -1,5 +1,3 @@
-<p align="center"><img src="assets/banner.jpg" alt="Line drawing of a microcontroller chip with a small network inside, under a tree of rejected candidate networks" width="100%"></p>
-
 # ENAS for microcontrollers
 
 Evolutionary architecture search under a hard 50,000 parameter budget. I kept
